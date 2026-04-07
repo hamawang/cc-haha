@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useProviderStore } from '../stores/providerStore'
 import { useUIStore } from '../stores/uiStore'
@@ -232,9 +232,15 @@ function ProviderFormModal({ open, onClose, mode, provider }: ProviderFormProps)
   const [isTesting, setIsTesting] = useState(false)
   const [settingsJson, setSettingsJson] = useState('')
   const [settingsJsonError, setSettingsJsonError] = useState<string | null>(null)
+  const jsonPastedRef = useRef(false)
 
   // Load current settings.json and merge provider env vars
   useEffect(() => {
+    // Skip if JSON was just populated by user paste
+    if (jsonPastedRef.current) {
+      jsonPastedRef.current = false
+      return
+    }
     import('../api/settings').then(({ settingsApi }) => {
       settingsApi.getUser().then((settings) => {
         const merged = {
@@ -423,10 +429,36 @@ function ProviderFormModal({ open, onClose, mode, provider }: ProviderFormProps)
           <textarea
             value={settingsJson}
             onChange={(e) => {
-              setSettingsJson(e.target.value)
+              const raw = e.target.value
+              setSettingsJson(raw)
               try {
-                JSON.parse(e.target.value)
+                const parsed = JSON.parse(raw)
                 setSettingsJsonError(null)
+                // Auto-fill form fields from parsed JSON env
+                const env = parsed.env as Record<string, string> | undefined
+                if (env) {
+                  if (env.ANTHROPIC_BASE_URL) {
+                    setBaseUrl(env.ANTHROPIC_BASE_URL)
+                    // Auto-switch to matching preset or Custom
+                    if (mode === 'create') {
+                      const matchedPreset = availablePresets.find((p) => p.id !== 'custom' && p.baseUrl === env.ANTHROPIC_BASE_URL)
+                      const targetPreset = matchedPreset || availablePresets.find((p) => p.id === 'custom')!
+                      if (targetPreset.id !== selectedPreset.id) {
+                        jsonPastedRef.current = true
+                        setSelectedPreset(targetPreset)
+                      }
+                    }
+                  }
+                  if (env.ANTHROPIC_AUTH_TOKEN && env.ANTHROPIC_AUTH_TOKEN !== '(your API key)') setApiKey(env.ANTHROPIC_AUTH_TOKEN)
+                  const newModels: Partial<ModelMapping> = {}
+                  if (env.ANTHROPIC_MODEL) newModels.main = env.ANTHROPIC_MODEL
+                  if (env.ANTHROPIC_DEFAULT_HAIKU_MODEL) newModels.haiku = env.ANTHROPIC_DEFAULT_HAIKU_MODEL
+                  if (env.ANTHROPIC_DEFAULT_SONNET_MODEL) newModels.sonnet = env.ANTHROPIC_DEFAULT_SONNET_MODEL
+                  if (env.ANTHROPIC_DEFAULT_OPUS_MODEL) newModels.opus = env.ANTHROPIC_DEFAULT_OPUS_MODEL
+                  if (Object.keys(newModels).length > 0) {
+                    setModels((prev) => ({ ...prev, ...newModels }))
+                  }
+                }
               } catch (err) {
                 setSettingsJsonError(err instanceof Error ? err.message : 'Invalid JSON')
               }
