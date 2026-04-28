@@ -129,7 +129,7 @@ describe('MessageList nested tool calls', () => {
     expect(toolGroups.map((item) => item.toolCalls[0]?.toolUseId)).toEqual(['agent-1', 'write-1'])
   })
 
-  it('keeps later nested tool calls after an interleaved user message', () => {
+  it('keeps later nested tool calls under their parent after an interleaved user message', () => {
     const messages: UIMessage[] = [
       {
         id: 'tool-agent',
@@ -175,11 +175,37 @@ describe('MessageList nested tool calls', () => {
     expect(renderedKinds).toEqual([
       'tool:agent-1',
       'message:user-follow-up',
-      'tool:write-1',
     ])
     expect(
       (childToolCallsByParent.get('agent-1') ?? []).map((toolCall) => toolCall.toolUseId),
-    ).toEqual(['read-1'])
+    ).toEqual(['read-1', 'write-1'])
+  })
+
+  it('does not render parented orphan tool results as root session messages', () => {
+    const messages: UIMessage[] = [
+      {
+        id: 'tool-agent',
+        type: 'tool_use',
+        toolName: 'Agent',
+        toolUseId: 'agent-1',
+        input: { description: 'Inspect src/components' },
+        timestamp: 1,
+      },
+      {
+        id: 'result-child',
+        type: 'tool_result',
+        toolUseId: 'grep-1',
+        content: 'Found 22 files',
+        isError: false,
+        timestamp: 2,
+        parentToolUseId: 'agent-1',
+      },
+    ]
+
+    const { renderItems } = buildRenderModel(messages)
+
+    expect(renderItems).toHaveLength(1)
+    expect(renderItems[0]).toMatchObject({ kind: 'tool_group' })
   })
 
   it('shows failed agent status and compact unavailable summary for Explore launch errors', () => {
@@ -235,7 +261,13 @@ describe('MessageList nested tool calls', () => {
               toolUseId: 'agent-1',
               content: {
                 status: 'completed',
-                content: [{ type: 'text', text: longResult }],
+                content: [
+                  { type: 'text', text: longResult },
+                  {
+                    type: 'text',
+                    text: "agentId: a0c0c732f61442dc1 (use SendMessage with to: 'a0c0c732f61442dc1' to continue this agent)\n<usage>total_tokens: 17195\ntool_uses: 2\nduration_ms: 41368</usage>",
+                  },
+                ],
               },
               isError: false,
               timestamp: 2,
@@ -254,6 +286,8 @@ describe('MessageList nested tool calls', () => {
 
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).getByText(/第二段补充内容用于验证 dialog 展示的是完整结果而不是截断摘要。/)).toBeTruthy()
+    expect(within(dialog).queryByText(/agentId:/)).toBeNull()
+    expect(within(dialog).queryByText(/total_tokens/)).toBeNull()
     expect(screen.getByRole('button', { name: 'Close dialog' })).toBeTruthy()
   })
 

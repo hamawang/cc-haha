@@ -46,6 +46,21 @@ async function writeSessionFile(
   return filePath
 }
 
+async function writeSubagentTranscriptFile(
+  projectDir: string,
+  sessionId: string,
+  agentId: string,
+  entries: Record<string, unknown>[],
+): Promise<string> {
+  const dir = path.join(tmpDir, 'projects', projectDir, sessionId, 'subagents')
+  await fs.mkdir(dir, { recursive: true })
+  const normalizedAgentId = agentId.startsWith('agent-') ? agentId : `agent-${agentId}`
+  const filePath = path.join(dir, `${normalizedAgentId}.jsonl`)
+  const content = entries.map((e) => JSON.stringify(e)).join('\n') + '\n'
+  await fs.writeFile(filePath, content, 'utf-8')
+  return filePath
+}
+
 async function writeSkill(
   rootDir: string,
   skillName: string,
@@ -287,6 +302,110 @@ describe('SessionService', () => {
 
     const messages = await service.getSessionMessages(sessionId)
     expect(messages).toHaveLength(2)
+  })
+
+  it('should append subagent tool calls under their parent agent tool result', async () => {
+    const sessionId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    const projectDir = '-tmp-project'
+    const agentId = 'abc123'
+
+    await writeSessionFile(projectDir, sessionId, [
+      makeSnapshotEntry(),
+      makeUserEntry('Dispatch an agent'),
+      {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'Agent:0',
+              name: 'Agent',
+              input: { description: 'Inspect alpha' },
+            },
+          ],
+        },
+        uuid: crypto.randomUUID(),
+        timestamp: '2026-01-01T00:00:02.000Z',
+      },
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'Agent:0',
+              content: [
+                {
+                  type: 'text',
+                  text: `alpha summary\nagentId: ${agentId} (use SendMessage with to: '${agentId}' to continue this agent)\n<usage>total_tokens: 10\ntool_uses: 2\nduration_ms: 30</usage>`,
+                },
+              ],
+            },
+          ],
+        },
+        uuid: crypto.randomUUID(),
+        timestamp: '2026-01-01T00:00:03.000Z',
+      },
+    ])
+    await writeSubagentTranscriptFile(projectDir, sessionId, agentId, [
+      {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'Read:0',
+              name: 'Read',
+              input: { file_path: '/tmp/alpha.txt' },
+            },
+          ],
+        },
+        uuid: crypto.randomUUID(),
+        timestamp: '2026-01-01T00:00:04.000Z',
+      },
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'Read:0',
+              content: 'alpha body',
+            },
+          ],
+        },
+        uuid: crypto.randomUUID(),
+        timestamp: '2026-01-01T00:00:05.000Z',
+      },
+    ])
+
+    const messages = await service.getSessionMessages(sessionId)
+    const childToolUse = messages.find(
+      (message) => message.type === 'tool_use' && message.parentToolUseId === 'Agent:0',
+    )
+    const childToolResult = messages.find(
+      (message) => message.type === 'tool_result' && message.parentToolUseId === 'Agent:0',
+    )
+
+    expect(childToolUse?.content).toEqual([
+      {
+        type: 'tool_use',
+        id: 'Agent:0/abc123/Read:0',
+        name: 'Read',
+        input: { file_path: '/tmp/alpha.txt' },
+      },
+    ])
+    expect(childToolResult?.content).toEqual([
+      {
+        type: 'tool_result',
+        tool_use_id: 'Agent:0/abc123/Read:0',
+        content: 'alpha body',
+      },
+    ])
   })
 
   it('should hide synthetic interruption, no-response, and command breadcrumb transcript entries', async () => {

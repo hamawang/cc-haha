@@ -132,6 +132,8 @@ type RawEntry = {
   [key: string]: unknown
 }
 
+type ContentBlock = Record<string, unknown>
+
 const USER_INTERRUPTION_TEXTS = new Set([
   '[Request interrupted by user]',
   '[Request interrupted by user for tool use]',
@@ -348,6 +350,145 @@ export class SessionService {
     }
 
     return undefined
+  }
+
+  private extractAgentToolUseIdsFromMessage(message: MessageEntry): string[] {
+    if (message.type !== 'tool_use' || !Array.isArray(message.content)) {
+      return []
+    }
+
+    return (message.content as ContentBlock[])
+      .filter((block) => block.type === 'tool_use' && block.name === 'Agent')
+      .flatMap((block) => (typeof block.id === 'string' ? [block.id] : []))
+  }
+
+  private extractTextFromContent(content: unknown): string {
+    if (typeof content === 'string') return content
+    if (!Array.isArray(content)) return ''
+
+    return (content as ContentBlock[])
+      .flatMap((block) => (typeof block.text === 'string' ? [block.text] : []))
+      .join('\n')
+  }
+
+  private extractAgentIdFromResultText(text: string): string | undefined {
+    const match = text.match(/(?:^|\n)\s*agentId:\s*([A-Za-z0-9_-]+)/)
+    return match?.[1]
+  }
+
+  private extractAgentResultLinks(messages: MessageEntry[]): Map<string, string> {
+    const agentToolUseIds = new Set(
+      messages.flatMap((message) => this.extractAgentToolUseIdsFromMessage(message)),
+    )
+    const resultLinks = new Map<string, string>()
+
+    for (const message of messages) {
+      if (message.type !== 'tool_result' || !Array.isArray(message.content)) {
+        continue
+      }
+
+      for (const block of message.content as ContentBlock[]) {
+        if (block.type !== 'tool_result' || typeof block.tool_use_id !== 'string') {
+          continue
+        }
+        if (!agentToolUseIds.has(block.tool_use_id)) {
+          continue
+        }
+
+        const agentId = this.extractAgentIdFromResultText(
+          this.extractTextFromContent(block.content),
+        )
+        if (agentId) {
+          resultLinks.set(block.tool_use_id, agentId)
+        }
+      }
+    }
+
+    return resultLinks
+  }
+
+  private namespaceSubagentContentIds(content: unknown, namespace: string): unknown {
+    if (!Array.isArray(content)) return content
+
+    return (content as ContentBlock[]).map((block) => {
+      if (!block || typeof block !== 'object') return block
+      if (block.type === 'tool_use' && typeof block.id === 'string') {
+        return { ...block, id: `${namespace}/${block.id}` }
+      }
+      if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') {
+        return { ...block, tool_use_id: `${namespace}/${block.tool_use_id}` }
+      }
+      return block
+    })
+  }
+
+  private subagentTranscriptPath(
+    projectDir: string,
+    sessionId: string,
+    agentId: string,
+  ): string {
+    const normalizedAgentId = agentId.startsWith('agent-') ? agentId : `agent-${agentId}`
+    return path.join(
+      this.getProjectsDir(),
+      projectDir,
+      sessionId,
+      'subagents',
+      `${normalizedAgentId}.jsonl`,
+    )
+  }
+
+  private async loadSubagentToolMessages(
+    projectDir: string,
+    sessionId: string,
+    parentToolUseId: string,
+    agentId: string,
+  ): Promise<MessageEntry[]> {
+    const filePath = this.subagentTranscriptPath(projectDir, sessionId, agentId)
+    const entries = await this.readJsonlFile(filePath)
+    const namespace = `${parentToolUseId}/${agentId}`
+    const messages: MessageEntry[] = []
+
+    for (const entry of entries) {
+      if (!entry.message?.role || entry.isMeta) continue
+      if (this.shouldHideTranscriptEntry(entry)) continue
+      if (entry.type !== 'user' && entry.type !== 'assistant' && entry.type !== 'system') {
+        continue
+      }
+
+      const message = this.entryToMessage(
+        {
+          ...entry,
+          message: {
+            ...entry.message,
+            content: this.namespaceSubagentContentIds(entry.message.content, namespace),
+          },
+        },
+        parentToolUseId,
+      )
+      if (message && (message.type === 'tool_use' || message.type === 'tool_result')) {
+        messages.push(message)
+      }
+    }
+
+    return messages
+  }
+
+  private async appendSubagentToolMessages(
+    projectDir: string,
+    sessionId: string,
+    messages: MessageEntry[],
+  ): Promise<MessageEntry[]> {
+    const resultLinks = this.extractAgentResultLinks(messages)
+    if (resultLinks.size === 0) {
+      return messages
+    }
+
+    const childMessages = await Promise.all(
+      [...resultLinks.entries()].map(([parentToolUseId, agentId]) =>
+        this.loadSubagentToolMessages(projectDir, sessionId, parentToolUseId, agentId),
+      ),
+    )
+    return [...messages, ...childMessages.flat()]
   }
 
   private resolveParentToolUseId(
@@ -783,7 +924,11 @@ export class SessionService {
     const stat = await fs.stat(filePath)
     const entries = await this.readJsonlFile(filePath)
 
-    const messages = this.entriesToMessages(entries)
+    const messages = await this.appendSubagentToolMessages(
+      projectDir,
+      sessionId,
+      this.entriesToMessages(entries),
+    )
     const title = this.extractTitle(entries)
     const workDir = this.resolveWorkDirFromEntries(entries, projectDir)
     const workDirExists = await this.pathExists(workDir)
@@ -819,7 +964,11 @@ export class SessionService {
     }
 
     const entries = await this.readJsonlFile(found.filePath)
-    return this.entriesToMessages(entries)
+    return await this.appendSubagentToolMessages(
+      found.projectDir,
+      sessionId,
+      this.entriesToMessages(entries),
+    )
   }
 
   /**

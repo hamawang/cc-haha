@@ -53,23 +53,15 @@ export function buildRenderModel(messages: UIMessage[]): RenderModel {
   const childToolCallsByParent = new Map<string, ToolCall[]>()
   const toolUseIds = new Set<string>()
   let pendingToolCalls: ToolCall[] = []
-  const inlineParentToolUseIds = new Set<string>()
 
-  const flushGroup = (resetInlineParents = false) => {
+  const flushGroup = () => {
     if (pendingToolCalls.length > 0) {
       items.push({
         kind: 'tool_group',
         toolCalls: [...pendingToolCalls],
         id: `group-${pendingToolCalls[0]!.id}`,
       })
-      for (const toolCall of pendingToolCalls) {
-        inlineParentToolUseIds.add(toolCall.toolUseId)
-      }
       pendingToolCalls = []
-    }
-
-    if (resetInlineParents) {
-      inlineParentToolUseIds.clear()
     }
   }
 
@@ -86,26 +78,24 @@ export function buildRenderModel(messages: UIMessage[]): RenderModel {
     if (msg.type === 'tool_result' && toolUseIds.has(msg.toolUseId)) {
       continue
     }
+    if (msg.type === 'tool_result' && msg.parentToolUseId && toolUseIds.has(msg.parentToolUseId)) {
+      continue
+    }
 
     if (msg.type === 'tool_use') {
-      const parentIsPending = msg.parentToolUseId
-        ? pendingToolCalls.some((toolCall) => toolCall.toolUseId === msg.parentToolUseId)
-        : false
-
-      if (msg.parentToolUseId && (inlineParentToolUseIds.has(msg.parentToolUseId) || parentIsPending)) {
+      if (msg.parentToolUseId && toolUseIds.has(msg.parentToolUseId)) {
         flushGroup()
         appendChildToolCall(childToolCallsByParent, msg.parentToolUseId, msg)
-        inlineParentToolUseIds.add(msg.toolUseId)
         continue
       }
       if (msg.toolName === 'AskUserQuestion') {
-        flushGroup(true)
+        flushGroup()
         items.push({ kind: 'message', message: msg })
       } else {
         pendingToolCalls.push(msg)
       }
     } else {
-      flushGroup(true)
+      flushGroup()
       items.push({ kind: 'message', message: msg })
     }
   }
