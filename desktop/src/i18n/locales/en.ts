@@ -634,6 +634,16 @@ export const en = {
   'chat.rewindFilesMore': '+{count} more',
   'chat.rewindSuccessWithCode': 'Rewound {count} messages and restored tracked files.',
   'chat.rewindSuccessConversationOnly': 'Rewound {count} messages. No file checkpoint was available for this turn.',
+  'chat.turnChangesCardLabel': 'Current turn changed files',
+  'chat.turnChangesTitle': '{count} files changed',
+  'chat.turnChangesSubtitle': 'Current turn checkpoint',
+  'chat.turnChangesUndo': 'Undo',
+  'chat.turnChangesUndoing': 'Undoing...',
+  'chat.turnChangesUndoAria': 'Undo current turn changes',
+  'chat.turnChangesShowDiffAria': 'Show diff for {path}',
+  'chat.turnChangesHideDiffAria': 'Hide diff for {path}',
+  'chat.turnChangesDiffLoading': 'Loading diff...',
+  'chat.turnChangesDiffUnavailable': 'Diff unavailable.',
 
   // ─── Streaming Indicator ──────────────────────────────────────
   'streaming.thinking': 'Thinking',

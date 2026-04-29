@@ -15,8 +15,8 @@ import { TeamStatusBar } from '../components/teams/TeamStatusBar'
 
 const TASK_POLL_INTERVAL_MS = 1000
 const WORKSPACE_RESIZE_STEP = 32
-const CHAT_COLUMN_COMPACT_CLASS =
-  'w-[clamp(340px,23vw,420px)] min-w-[340px] max-w-[420px] shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface)]'
+const CHAT_COLUMN_WITH_WORKSPACE_CLASS =
+  'min-w-[320px] flex-1 border-r border-[var(--color-border)] bg-[var(--color-surface)]'
 
 function WorkspaceResizeHandle() {
   const t = useTranslation()
@@ -165,7 +165,7 @@ export function ActiveSession() {
       <div data-testid="active-session-content-row" className="flex min-h-0 min-w-0 flex-1">
         <div
           data-testid="active-session-chat-column"
-          className={`flex flex-col ${showWorkspacePanel ? CHAT_COLUMN_COMPACT_CLASS : 'min-w-[360px] flex-1'}`}
+          className={`flex flex-col ${showWorkspacePanel ? CHAT_COLUMN_WITH_WORKSPACE_CLASS : 'min-w-[360px] flex-1'}`}
         >
           {isMemberSession && (
             <div className="shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface-container)]">

@@ -164,7 +164,10 @@ describe('WorkspacePanel', () => {
 
     const view = await renderPanel('session-changed')
 
-    expect(view.getByTestId('workspace-panel').style.maxWidth).toBe('calc(100% - 348px)')
+    const compactPanel = view.getByTestId('workspace-panel')
+    expect(compactPanel.style.width).toBe('520px')
+    expect(compactPanel.style.maxWidth).toBe('36%')
+    expect(compactPanel.style.minWidth).toBe('min(340px, 40%)')
 
     await waitFor(() => {
       expect(getMocks().getWorkspaceStatusMock).toHaveBeenCalledWith('session-changed')
@@ -209,6 +212,10 @@ describe('WorkspacePanel', () => {
     await waitFor(() => {
       expect(view.getByTestId('workspace-code').textContent).toContain('console.log("new")')
     })
+    const expandedPanel = view.getByTestId('workspace-panel')
+    expect(expandedPanel.style.width).toBe('860px')
+    expect(expandedPanel.style.maxWidth).toBe('min(62%, calc(100% - 328px))')
+    expect(expandedPanel.style.minWidth).toBe('min(420px, 54%)')
     expect(view.getAllByText('Diff').length).toBeGreaterThan(0)
   })
 

@@ -215,12 +215,31 @@ function getBackupFileNameFirstVersion(
   return undefined
 }
 
+function getBackupFileNameForTarget(
+  trackingPath: string,
+  snapshots: FileHistorySnapshot[],
+  targetSnapshot: FileHistorySnapshot,
+): string | null | undefined {
+  const targetBackup = targetSnapshot.trackedFileBackups[trackingPath]
+  if (targetBackup && 'backupFileName' in targetBackup) {
+    return targetBackup.backupFileName
+  }
+
+  return getBackupFileNameFirstVersion(trackingPath, snapshots)
+}
+
 async function readFileOrNull(filePath: string): Promise<string | null> {
   try {
     return await readFile(filePath, 'utf-8')
   } catch {
     return null
   }
+}
+
+function countInsertedLines(content: string): number {
+  return diffLines('', content).reduce((total, change) => (
+    change.added ? total + (change.count || 0) : total
+  ), 0)
 }
 
 async function hasFileChanged(
@@ -305,21 +324,21 @@ async function buildCodePreview(
   let deletions = 0
 
   for (const trackingPath of trackedPaths) {
-    const targetBackup = targetSnapshot.trackedFileBackups[trackingPath]
-    const backupFileName =
-      targetBackup?.backupFileName ??
-      getBackupFileNameFirstVersion(trackingPath, snapshots)
+    const backupFileName = getBackupFileNameForTarget(
+      trackingPath,
+      snapshots,
+      targetSnapshot,
+    )
 
     if (backupFileName === undefined) continue
 
     const absolutePath = expandTrackingPath(workDir, trackingPath)
 
     if (backupFileName === null) {
-      try {
-        await stat(absolutePath)
+      const currentContent = await readFileOrNull(absolutePath)
+      if (currentContent !== null) {
         filesChanged.push(absolutePath)
-      } catch {
-        // File is already absent.
+        insertions += countInsertedLines(currentContent)
       }
       continue
     }
@@ -412,10 +431,11 @@ export async function executeSessionRewind(
     }
 
     for (const trackingPath of collectTrackedPaths(snapshots)) {
-      const targetBackup = targetSnapshot.trackedFileBackups[trackingPath]
-      const backupFileName =
-        targetBackup?.backupFileName ??
-        getBackupFileNameFirstVersion(trackingPath, snapshots)
+      const backupFileName = getBackupFileNameForTarget(
+        trackingPath,
+        snapshots,
+        targetSnapshot,
+      )
 
       if (backupFileName === undefined) continue
 

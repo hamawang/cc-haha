@@ -1667,6 +1667,83 @@ describe('Sessions API', () => {
     expect(remainingMessages[0]?.id).toBe(firstUserId)
   })
 
+  it('POST /api/sessions/:id/rewind should include files created after the first turn', async () => {
+    const sessionId = 'eeeeeeee-bbbb-cccc-dddd-eeeeeeeeeeee'
+    const workDir = path.join(tmpDir, 'created-on-second-turn')
+    const firstFile = path.join(workDir, 'src', 'step.js')
+    const createdFile = path.join(workDir, 'notes', 'generated.txt')
+    const firstUserId = crypto.randomUUID()
+    const secondUserId = crypto.randomUUID()
+    const backupV1 = 'second-created-step@v1'
+    const backupV2 = 'second-created-step@v2'
+
+    await fs.mkdir(path.dirname(firstFile), { recursive: true })
+    await fs.mkdir(path.dirname(createdFile), { recursive: true })
+    await fs.writeFile(firstFile, "export const STEP = 'v2'\n", 'utf-8')
+    await fs.writeFile(createdFile, 'generated\n', 'utf-8')
+    await writeFileHistoryBackup(sessionId, backupV1, "export const STEP = 'base'\n")
+    await writeFileHistoryBackup(sessionId, backupV2, "export const STEP = 'v1'\n")
+
+    await writeSessionFile('-tmp-api-second-turn-created', sessionId, [
+      makeSessionMetaEntry(workDir),
+      makeFileHistorySnapshotEntry(firstUserId, {
+        'src/step.js': {
+          backupFileName: backupV1,
+          version: 1,
+          backupTime: '2026-01-01T00:00:00.000Z',
+        },
+      }),
+      {
+        ...makeUserEntry('make v1', firstUserId),
+        cwd: workDir,
+        sessionId,
+      },
+      makeAssistantEntry('DONE', firstUserId),
+      makeFileHistorySnapshotEntry(secondUserId, {
+        'src/step.js': {
+          backupFileName: backupV2,
+          version: 2,
+          backupTime: '2026-01-01T00:00:00.000Z',
+        },
+        'notes/generated.txt': {
+          backupFileName: null,
+          version: 2,
+          backupTime: '2026-01-01T00:00:00.000Z',
+        },
+      }),
+      {
+        ...makeUserEntry('make v2 and create file', secondUserId),
+        cwd: workDir,
+        sessionId,
+      },
+      makeAssistantEntry('DONE', secondUserId),
+    ])
+
+    const previewRes = await fetch(`${baseUrl}/api/sessions/${sessionId}/rewind`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userMessageIndex: 1, dryRun: true }),
+    })
+    expect(previewRes.status).toBe(200)
+    const preview = await previewRes.json() as {
+      code: { available: boolean; filesChanged: string[]; insertions: number }
+    }
+    expect(preview.code.filesChanged.sort()).toEqual([
+      createdFile,
+      firstFile,
+    ].sort())
+    expect(preview.code.insertions).toBe(2)
+
+    const executeRes = await fetch(`${baseUrl}/api/sessions/${sessionId}/rewind`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userMessageIndex: 1 }),
+    })
+    expect(executeRes.status).toBe(200)
+    expect(await fs.readFile(firstFile, 'utf-8')).toBe("export const STEP = 'v1'\n")
+    await expect(fs.stat(createdFile)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   // --------------------------------------------------------------------------
   // Conversations API via /api/sessions/:id/chat
   // --------------------------------------------------------------------------

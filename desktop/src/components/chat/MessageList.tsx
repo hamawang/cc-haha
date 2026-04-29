@@ -17,6 +17,7 @@ import { PermissionDialog } from './PermissionDialog'
 import { AskUserQuestion } from './AskUserQuestion'
 import { StreamingIndicator } from './StreamingIndicator'
 import { InlineTaskSummary } from './InlineTaskSummary'
+import { CurrentTurnChangeCard } from './CurrentTurnChangeCard'
 import type { AgentTaskNotification, UIMessage } from '../../types/chat'
 import { Modal } from '../shared/Modal'
 import { Button } from '../shared/Button'
@@ -32,6 +33,19 @@ type RenderModel = {
   renderItems: RenderItem[]
   toolResultMap: Map<string, ToolResult>
   childToolCallsByParent: Map<string, ToolCall[]>
+}
+
+type RewindTurnTarget = {
+  messageId: string
+  userMessageIndex: number
+  content: string
+  attachments?: Extract<UIMessage, { type: 'user_text' }>['attachments']
+}
+
+type CurrentTurnPreview = {
+  target: RewindTurnTarget
+  preview: SessionRewindResponse
+  workDir: string | null
 }
 
 function appendChildToolCall(
@@ -104,6 +118,41 @@ export function buildRenderModel(messages: UIMessage[]): RenderModel {
   return { renderItems: items, toolResultMap, childToolCallsByParent }
 }
 
+export function getLatestCompletedTurnTarget(messages: UIMessage[]): RewindTurnTarget | null {
+  let userMessageIndex = -1
+  let latestTarget: (RewindTurnTarget & { messageOffset: number }) | null = null
+
+  for (let messageOffset = 0; messageOffset < messages.length; messageOffset += 1) {
+    const message = messages[messageOffset]
+    if (!message || message.type !== 'user_text' || message.pending) continue
+    userMessageIndex += 1
+    latestTarget = {
+      messageId: message.id,
+      userMessageIndex,
+      content: message.content,
+      attachments: message.attachments,
+      messageOffset,
+    }
+  }
+
+  if (!latestTarget) return null
+
+  const hasResponseAfterTarget = messages
+    .slice(latestTarget.messageOffset + 1)
+    .some((message) =>
+      message.type === 'assistant_text' ||
+      message.type === 'tool_use' ||
+      message.type === 'tool_result' ||
+      message.type === 'error' ||
+      message.type === 'task_summary',
+    )
+
+  if (!hasResponseAfterTarget) return null
+
+  const { messageOffset: _messageOffset, ...target } = latestTarget
+  return target
+}
+
 type MessageListProps = {
   sessionId?: string | null
   compact?: boolean
@@ -151,6 +200,10 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
   const [rewindError, setRewindError] = useState<string | null>(null)
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [isExecutingRewind, setIsExecutingRewind] = useState(false)
+  const [currentTurnPreview, setCurrentTurnPreview] = useState<CurrentTurnPreview | null>(null)
+  const [currentTurnError, setCurrentTurnError] = useState<string | null>(null)
+  const [isLoadingCurrentTurnPreview, setIsLoadingCurrentTurnPreview] = useState(false)
+  const [isUndoingCurrentTurn, setIsUndoingCurrentTurn] = useState(false)
 
   const updateAutoScrollState = useCallback(() => {
     const container = scrollContainerRef.current
@@ -216,6 +269,69 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
     () => buildRenderModel(messages),
     [messages],
   )
+  const latestTurnTarget = useMemo(() => getLatestCompletedTurnTarget(messages), [messages])
+
+  useEffect(() => {
+    if (
+      !resolvedSessionId ||
+      !latestTurnTarget ||
+      chatState !== 'idle' ||
+      isMemberSession
+    ) {
+      setCurrentTurnPreview(null)
+      setCurrentTurnError(null)
+      setIsLoadingCurrentTurnPreview(false)
+      return
+    }
+
+    let cancelled = false
+    setIsLoadingCurrentTurnPreview(true)
+    setCurrentTurnPreview(null)
+    setCurrentTurnError(null)
+
+    Promise.all([
+      sessionsApi.rewind(resolvedSessionId, {
+        targetUserMessageId: latestTurnTarget.messageId,
+        userMessageIndex: latestTurnTarget.userMessageIndex,
+        expectedContent: latestTurnTarget.content,
+        dryRun: true,
+      }),
+      sessionsApi.getWorkspaceStatus(resolvedSessionId).catch(() => null),
+    ])
+      .then(([preview, workspaceStatus]) => {
+        if (cancelled) return
+        if (!preview.code.available || preview.code.filesChanged.length === 0) {
+          setCurrentTurnPreview(null)
+          return
+        }
+        setCurrentTurnPreview({
+          target: latestTurnTarget,
+          preview,
+          workDir: workspaceStatus?.workDir ?? null,
+        })
+      })
+      .catch((error) => {
+        if (cancelled) return
+        const message =
+          error instanceof ApiError
+            ? typeof error.body === 'object' && error.body && 'message' in error.body
+              ? String((error.body as { message: unknown }).message)
+              : error.message
+            : error instanceof Error
+              ? error.message
+              : String(error)
+        setCurrentTurnError(message)
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingCurrentTurnPreview(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [chatState, isMemberSession, latestTurnTarget, resolvedSessionId])
 
   const closeRewindModal = useCallback(() => {
     if (isExecutingRewind) return
@@ -282,6 +398,67 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
     reloadHistory,
     resolvedSessionId,
     rewindTarget,
+    stopGeneration,
+    t,
+  ])
+
+  const handleUndoCurrentTurn = useCallback(async () => {
+    if (!resolvedSessionId || !currentTurnPreview || isUndoingCurrentTurn) return
+
+    const target = currentTurnPreview.target
+    setIsUndoingCurrentTurn(true)
+    setCurrentTurnError(null)
+
+    try {
+      if (chatState !== 'idle') {
+        stopGeneration(resolvedSessionId)
+      }
+
+      const result = await sessionsApi.rewind(resolvedSessionId, {
+        targetUserMessageId: target.messageId,
+        userMessageIndex: target.userMessageIndex,
+        expectedContent: target.content,
+      })
+
+      await reloadHistory(resolvedSessionId)
+      queueComposerPrefill(resolvedSessionId, {
+        text: target.content,
+        attachments: target.attachments,
+      })
+
+      addToast({
+        type: 'success',
+        message: result.code.available
+          ? t('chat.rewindSuccessWithCode', {
+              count: result.conversation.messagesRemoved,
+            })
+          : t('chat.rewindSuccessConversationOnly', {
+              count: result.conversation.messagesRemoved,
+            }),
+      })
+
+      setCurrentTurnPreview(null)
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? typeof error.body === 'object' && error.body && 'message' in error.body
+            ? String((error.body as { message: unknown }).message)
+            : error.message
+          : error instanceof Error
+            ? error.message
+            : String(error)
+      setCurrentTurnError(message)
+    } finally {
+      setIsUndoingCurrentTurn(false)
+    }
+  }, [
+    addToast,
+    chatState,
+    currentTurnPreview,
+    isUndoingCurrentTurn,
+    queueComposerPrefill,
+    reloadHistory,
+    resolvedSessionId,
     stopGeneration,
     t,
   ])
@@ -358,6 +535,25 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
               sending a message and receiving the first thinking delta */}
         {(chatState === 'tool_executing' || (chatState === 'thinking' && !activeThinkingId)) && (
           <StreamingIndicator />
+        )}
+
+        {!isLoadingCurrentTurnPreview && currentTurnPreview && resolvedSessionId && (
+          <CurrentTurnChangeCard
+            sessionId={resolvedSessionId}
+            preview={currentTurnPreview.preview}
+            workDir={currentTurnPreview.workDir}
+            error={currentTurnError}
+            isUndoing={isUndoingCurrentTurn}
+            onUndo={() => {
+              void handleUndoCurrentTurn()
+            }}
+          />
+        )}
+
+        {!currentTurnPreview && currentTurnError && (
+          <div className="mx-auto mb-5 max-w-[760px] rounded-[var(--radius-lg)] border border-[var(--color-error)]/25 bg-[var(--color-error-container)]/18 px-4 py-3 text-xs text-[var(--color-error)]">
+            {currentTurnError}
+          </div>
         )}
 
         <div ref={bottomRef} />

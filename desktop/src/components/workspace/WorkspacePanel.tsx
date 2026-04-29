@@ -738,6 +738,11 @@ export function WorkspacePanel({ sessionId }: WorkspacePanelProps) {
 
   if (!isOpen) return null
 
+  const hasPreviewTabs = previewTabs.length > 0
+  const panelWidth = hasPreviewTabs ? width : Math.min(width, 520)
+  const panelMaxWidth = hasPreviewTabs ? 'min(62%, calc(100% - 328px))' : '36%'
+  const panelMinWidth = hasPreviewTabs ? 'min(420px, 54%)' : 'min(340px, 40%)'
+
   const handleRefresh = () => {
     void loadStatus(sessionId)
     if (activeView === 'all') {
@@ -975,9 +980,9 @@ export function WorkspacePanel({ sessionId }: WorkspacePanelProps) {
     <aside
       data-testid="workspace-panel"
       className="flex h-full shrink-0 border-l border-[#e7e7e7] bg-white"
-      style={{ width, maxWidth: 'calc(100% - 348px)' }}
+      style={{ width: panelWidth, maxWidth: panelMaxWidth, minWidth: panelMinWidth }}
     >
-      {previewTabs.length > 0 && (
+      {hasPreviewTabs && (
         <div className="flex min-w-0 flex-1 flex-col border-r border-[#e7e7e7] bg-white">
           {renderPreviewTabs()}
           {renderPreviewContent()}
@@ -985,7 +990,7 @@ export function WorkspacePanel({ sessionId }: WorkspacePanelProps) {
       )}
 
       <div
-        className={`${previewTabs.length > 0 ? 'basis-[38%] min-w-[210px] max-w-[360px]' : 'w-full'} flex h-full shrink-0 flex-col bg-white`}
+        className={`${hasPreviewTabs ? 'basis-[32%] min-w-[220px] max-w-[320px]' : 'w-full'} flex h-full shrink-0 flex-col bg-white`}
       >
         <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[#ececec] px-3">
           <div className="relative min-w-0">

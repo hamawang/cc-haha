@@ -682,6 +682,227 @@ describe('MessageList nested tool calls', () => {
     })
   })
 
+  it('shows a current-turn change card from checkpoint preview', async () => {
+    vi.spyOn(sessionsApi, 'rewind').mockResolvedValue({
+      target: {
+        targetUserMessageId: 'user-2',
+        userMessageIndex: 1,
+        userMessageCount: 2,
+      },
+      conversation: {
+        messagesRemoved: 2,
+      },
+      code: {
+        available: true,
+        filesChanged: ['src/App.tsx', 'src/lib/api.ts'],
+        insertions: 12,
+        deletions: 4,
+      },
+    })
+    vi.spyOn(sessionsApi, 'getWorkspaceStatus').mockResolvedValue({
+      state: 'ok',
+      workDir: '/tmp/example-project',
+      repoName: 'example-project',
+      branch: null,
+      isGitRepo: false,
+      changedFiles: [],
+    })
+
+    useChatStore.setState({
+      sessions: {
+        [ACTIVE_TAB]: makeSessionState({
+          messages: [
+            {
+              id: 'user-1',
+              type: 'user_text',
+              content: '第一段',
+              timestamp: 1,
+            },
+            {
+              id: 'assistant-1',
+              type: 'assistant_text',
+              content: 'ok',
+              timestamp: 2,
+            },
+            {
+              id: 'user-2',
+              type: 'user_text',
+              content: '第二段',
+              timestamp: 3,
+            },
+            {
+              id: 'assistant-2',
+              type: 'assistant_text',
+              content: 'done',
+              timestamp: 4,
+            },
+          ],
+        }),
+      },
+    })
+
+    render(<MessageList />)
+
+    expect(await screen.findByText('2 files changed')).toBeTruthy()
+    expect(screen.getByText('+12')).toBeTruthy()
+    expect(screen.getByText('-4')).toBeTruthy()
+    expect(screen.getByText('src/App.tsx')).toBeTruthy()
+    expect(screen.getByText('src/lib/api.ts')).toBeTruthy()
+    expect(sessionsApi.rewind).toHaveBeenCalledWith(ACTIVE_TAB, {
+      targetUserMessageId: 'user-2',
+      userMessageIndex: 1,
+      expectedContent: '第二段',
+      dryRun: true,
+    })
+  })
+
+  it('expands a current-turn changed file diff', async () => {
+    vi.spyOn(sessionsApi, 'rewind').mockResolvedValue({
+      target: {
+        targetUserMessageId: 'user-1',
+        userMessageIndex: 0,
+        userMessageCount: 1,
+      },
+      conversation: {
+        messagesRemoved: 2,
+      },
+      code: {
+        available: true,
+        filesChanged: ['src/App.tsx'],
+        insertions: 1,
+        deletions: 1,
+      },
+    })
+    vi.spyOn(sessionsApi, 'getWorkspaceStatus').mockResolvedValue({
+      state: 'ok',
+      workDir: '/tmp/example-project',
+      repoName: 'example-project',
+      branch: null,
+      isGitRepo: false,
+      changedFiles: [],
+    })
+    vi.spyOn(sessionsApi, 'getWorkspaceDiff').mockResolvedValue({
+      state: 'ok',
+      path: 'src/App.tsx',
+      diff: 'diff --session a/src/App.tsx b/src/App.tsx\n-old\n+new',
+    })
+
+    useChatStore.setState({
+      sessions: {
+        [ACTIVE_TAB]: makeSessionState({
+          messages: [
+            {
+              id: 'user-1',
+              type: 'user_text',
+              content: '改一下',
+              timestamp: 1,
+            },
+            {
+              id: 'assistant-1',
+              type: 'assistant_text',
+              content: 'done',
+              timestamp: 2,
+            },
+          ],
+        }),
+      },
+    })
+
+    render(<MessageList />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show diff for src/App.tsx' }))
+
+    expect(await screen.findByText('+new')).toBeTruthy()
+    expect(sessionsApi.getWorkspaceDiff).toHaveBeenCalledWith(ACTIVE_TAB, 'src/App.tsx')
+  })
+
+  it('undoes the current turn from the change card using checkpoint rewind', async () => {
+    vi.spyOn(sessionsApi, 'rewind')
+      .mockResolvedValueOnce({
+        target: {
+          targetUserMessageId: 'user-1',
+          userMessageIndex: 0,
+          userMessageCount: 1,
+        },
+        conversation: {
+          messagesRemoved: 2,
+        },
+        code: {
+          available: true,
+          filesChanged: ['src/App.tsx'],
+          insertions: 1,
+          deletions: 0,
+        },
+      })
+      .mockResolvedValueOnce({
+        target: {
+          targetUserMessageId: 'user-1',
+          userMessageIndex: 0,
+          userMessageCount: 1,
+        },
+        conversation: {
+          messagesRemoved: 2,
+          removedMessageIds: ['user-1', 'assistant-1'],
+        },
+        code: {
+          available: true,
+          filesChanged: ['src/App.tsx'],
+          insertions: 1,
+          deletions: 0,
+        },
+      })
+    vi.spyOn(sessionsApi, 'getWorkspaceStatus').mockResolvedValue({
+      state: 'ok',
+      workDir: '/tmp/example-project',
+      repoName: 'example-project',
+      branch: null,
+      isGitRepo: false,
+      changedFiles: [],
+    })
+    const reloadHistory = vi.fn().mockResolvedValue(undefined)
+    const queueComposerPrefill = vi.fn()
+
+    useChatStore.setState({
+      reloadHistory,
+      queueComposerPrefill,
+      sessions: {
+        [ACTIVE_TAB]: makeSessionState({
+          messages: [
+            {
+              id: 'user-1',
+              type: 'user_text',
+              content: '做一个页面',
+              timestamp: 1,
+            },
+            {
+              id: 'assistant-1',
+              type: 'assistant_text',
+              content: 'done',
+              timestamp: 2,
+            },
+          ],
+        }),
+      },
+    })
+
+    render(<MessageList />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo current turn changes' }))
+
+    await waitFor(() => {
+      expect(sessionsApi.rewind).toHaveBeenLastCalledWith(ACTIVE_TAB, {
+        targetUserMessageId: 'user-1',
+        userMessageIndex: 0,
+        expectedContent: '做一个页面',
+      })
+    })
+    expect(reloadHistory).toHaveBeenCalledWith(ACTIVE_TAB)
+    expect(queueComposerPrefill).toHaveBeenCalledWith(ACTIVE_TAB, {
+      text: '做一个页面',
+      attachments: undefined,
+    })
+  })
+
   it('shows raw startup details under translated CLI startup errors', () => {
     useChatStore.setState({
       sessions: {

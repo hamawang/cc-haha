@@ -636,6 +636,16 @@ export const zh: Record<TranslationKey, string> = {
   'chat.rewindFilesMore': '另有 {count} 个',
   'chat.rewindSuccessWithCode': '已回滚 {count} 条消息，并恢复相关文件。',
   'chat.rewindSuccessConversationOnly': '已回滚 {count} 条消息。这一轮没有可用的文件检查点。',
+  'chat.turnChangesCardLabel': '当前轮次已更改文件',
+  'chat.turnChangesTitle': '{count} 个文件已更改',
+  'chat.turnChangesSubtitle': '当前轮次检查点',
+  'chat.turnChangesUndo': '撤销',
+  'chat.turnChangesUndoing': '正在撤销...',
+  'chat.turnChangesUndoAria': '撤销当前轮次变更',
+  'chat.turnChangesShowDiffAria': '查看 {path} 的 diff',
+  'chat.turnChangesHideDiffAria': '收起 {path} 的 diff',
+  'chat.turnChangesDiffLoading': '正在加载 diff...',
+  'chat.turnChangesDiffUnavailable': 'Diff 不可用。',
 
   // ─── Streaming Indicator ──────────────────────────────────────
   'streaming.thinking': '思考中',
