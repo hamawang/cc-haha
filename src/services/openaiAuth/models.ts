@@ -1,6 +1,8 @@
 export const OPENAI_DEFAULT_MAIN_MODEL = 'gpt-5.3-codex'
 export const OPENAI_DEFAULT_SONNET_MODEL = 'gpt-5.4'
 export const OPENAI_DEFAULT_HAIKU_MODEL = 'gpt-5.4-mini'
+export const OPENAI_GPT5_STANDARD_CONTEXT_WINDOW = 400_000
+export const OPENAI_GPT5_LARGE_CONTEXT_WINDOW = 1_050_000
 
 export type OpenAIModelCatalogEntry = {
   value: string
@@ -97,4 +99,39 @@ export function getOpenAIModelDisplayName(model: string): string | null {
     default:
       return null
   }
+}
+
+export function getOpenAIContextWindowForModel(model: string): number | null {
+  const normalized = model.trim().toLowerCase()
+
+  // Current OpenAI model docs split GPT-5-family context windows into
+  // standard 400k models and larger 1.05M models.
+  if (
+    normalized === 'gpt-5.5' ||
+    normalized === 'gpt-5.5-pro' ||
+    normalized === 'gpt-5.4' ||
+    normalized === 'gpt-5.4-pro'
+  ) {
+    return OPENAI_GPT5_LARGE_CONTEXT_WINDOW
+  }
+
+  if (
+    normalized === 'gpt-5.4-mini' ||
+    normalized === 'gpt-5.4-nano' ||
+    normalized === 'gpt-5.3-codex' ||
+    normalized === 'gpt-5.2' ||
+    normalized === 'gpt-5.2-codex' ||
+    normalized === 'gpt-5.1' ||
+    normalized === 'gpt-5.1-codex' ||
+    normalized === 'gpt-5.1-codex-max' ||
+    normalized === 'gpt-5.1-codex-mini' ||
+    normalized === 'gpt-5-codex' ||
+    normalized === 'gpt-5' ||
+    normalized === 'gpt-5-mini' ||
+    normalized === 'gpt-5-nano'
+  ) {
+    return OPENAI_GPT5_STANDARD_CONTEXT_WINDOW
+  }
+
+  return null
 }

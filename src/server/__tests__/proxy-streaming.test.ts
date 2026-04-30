@@ -281,6 +281,12 @@ describe('openaiResponsesStreamToAnthropic', () => {
     const texts = textDeltas.map((e) => (e.data.delta as Record<string, unknown>).text)
     expect(texts).toContain('Hello')
     expect(texts).toContain(' world')
+
+    const msgDelta = events.find((e) => e.event === 'message_delta')!
+    expect(msgDelta.data.usage).toEqual({
+      input_tokens: 10,
+      output_tokens: 5,
+    })
   })
 
   test('function call streaming', async () => {
