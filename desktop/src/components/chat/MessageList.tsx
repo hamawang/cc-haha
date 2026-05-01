@@ -90,6 +90,10 @@ export function buildRenderModel(messages: UIMessage[]): RenderModel {
   }
 
   for (const msg of messages) {
+    if (msg.type === 'assistant_text' && !msg.content.trim()) {
+      continue
+    }
+
     if (msg.type === 'tool_result' && toolUseIds.has(msg.toolUseId)) {
       continue
     }
@@ -495,7 +499,7 @@ export function MessageList({ sessionId, compact = false }: MessageListProps = {
           )
         })}
 
-        {streamingText && (
+        {streamingText.trim() && (
           <AssistantMessage content={streamingText} isStreaming={chatState === 'streaming'} />
         )}
 

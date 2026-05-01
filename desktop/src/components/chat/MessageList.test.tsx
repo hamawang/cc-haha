@@ -95,6 +95,41 @@ describe('MessageList nested tool calls', () => {
     expect(container.textContent).toContain('Agent')
   })
 
+  it('does not render blank assistant bubbles for whitespace-only text', () => {
+    const messages: UIMessage[] = [
+      {
+        id: 'assistant-empty',
+        type: 'assistant_text',
+        content: '\n\n  ',
+        timestamp: 1,
+      },
+      {
+        id: 'tool-bash',
+        type: 'tool_use',
+        toolName: 'Bash',
+        toolUseId: 'bash-1',
+        input: { command: 'pwd' },
+        timestamp: 2,
+      },
+    ]
+
+    const { renderItems } = buildRenderModel(messages)
+    expect(renderItems).toHaveLength(1)
+    expect(renderItems[0]).toMatchObject({ kind: 'tool_group' })
+
+    useChatStore.setState({
+      sessions: {
+        [ACTIVE_TAB]: makeSessionState({
+          messages,
+          streamingText: '\n  ',
+        }),
+      },
+    })
+
+    const { container } = render(<MessageList />)
+    expect(container.querySelectorAll('[data-message-shell="assistant"]')).toHaveLength(0)
+  })
+
   it('keeps root tool runs split when nested child tool calls appear between them', () => {
     const messages: UIMessage[] = [
       {

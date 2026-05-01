@@ -184,6 +184,35 @@ describe('chatStore history mapping', () => {
     ])
   })
 
+  it('skips whitespace-only assistant transcript messages', () => {
+    const messages: MessageEntry[] = [
+      {
+        id: 'assistant-empty',
+        type: 'assistant',
+        timestamp: '2026-04-06T00:00:00.000Z',
+        model: 'opus',
+        content: '\n\n  ',
+      },
+      {
+        id: 'assistant-real',
+        type: 'assistant',
+        timestamp: '2026-04-06T00:00:01.000Z',
+        model: 'opus',
+        content: '可见回复',
+      },
+    ]
+
+    const mapped = mapHistoryMessagesToUiMessages(messages)
+
+    expect(mapped).toMatchObject([
+      {
+        id: 'assistant-real',
+        type: 'assistant_text',
+        content: '可见回复',
+      },
+    ])
+  })
+
   it('surfaces teammate prompt content when mapping member transcript history', () => {
     const messages: MessageEntry[] = [
       {

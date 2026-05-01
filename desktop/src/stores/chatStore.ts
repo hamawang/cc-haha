@@ -1080,6 +1080,7 @@ export function mapHistoryMessagesToUiMessages(
       continue
     }
     if (msg.type === 'assistant' && typeof msg.content === 'string') {
+      if (!msg.content.trim()) continue
       uiMessages.push({ id: msg.id || nextId(), type: 'assistant_text', content: msg.content, timestamp, model: msg.model })
       continue
     }
