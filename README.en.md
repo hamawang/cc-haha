@@ -195,6 +195,7 @@ http://127.0.0.1:2024
 |------|------|
 | [Environment Variables](docs/en/guide/env-vars.md) | Full env var reference and configuration methods |
 | [Third-Party Models](docs/en/guide/third-party-models.md) | Using OpenAI / DeepSeek / Ollama and other non-Anthropic models |
+| [Contributing](docs/en/guide/contributing.md) | Local tests, live model baselines, PR gates, and release gates |
 | [Memory System](docs/memory/01-usage-guide.md) | Cross-session persistent memory usage and implementation |
 | [Multi-Agent System](docs/agent/01-usage-guide.md) | Agent orchestration, parallel tasks and Teams collaboration |
 | [Skills System](docs/skills/01-usage-guide.md) | Extensible capability plugins, custom workflows and conditional activation |
