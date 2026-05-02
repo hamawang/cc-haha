@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 node_modules
+openspec
 .DS_Store
 
 # Computer Use runtime (auto-generated)
