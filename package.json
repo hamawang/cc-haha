@@ -18,6 +18,7 @@
     "check:native": "cd desktop && bun run build:sidecars && cd src-tauri && cargo check",
     "check:docs": "npm ci && npm run docs:build",
     "quality:gate": "bun run scripts/quality-gate/index.ts",
+    "quality:providers": "bun run scripts/quality-gate/providers.ts",
     "quality:pr": "bun run quality:gate --mode pr",
     "quality:baseline": "bun run quality:gate --mode baseline",
     "quality:release": "bun run quality:gate --mode release",

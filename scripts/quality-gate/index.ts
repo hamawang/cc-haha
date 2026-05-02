@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { runQualityGate } from './runner'
+import { formatProviderTargets, loadProviderIndex, parseBaselineTargetValues } from './providerTargets'
 import type { BaselineTarget, QualityGateMode } from './types'
 
 function parseArgs(argv: string[]) {
@@ -36,30 +37,23 @@ function readMode(value: string | boolean | undefined): QualityGateMode {
   if (value === 'pr' || value === 'baseline' || value === 'release') {
     return value
   }
-  throw new Error('Usage: bun run quality:gate --mode <pr|baseline|release> [--dry-run] [--allow-live]')
+  throw new Error('Usage: bun run quality:gate --mode <pr|baseline|release> [--dry-run] [--allow-live] [--provider-model provider:model[:label]]')
 }
 
 function readBaselineTargets(args: Map<string, Array<string | boolean>>): BaselineTarget[] {
   const values = (args.get('--provider-model') ?? [])
     .filter((value): value is string => typeof value === 'string')
-    .flatMap((value) => value.split(','))
-    .map((value) => value.trim())
-    .filter(Boolean)
 
-  return values.map((value) => {
-    const [providerId, modelId, rawLabel] = value.split(':')
-    if (!providerId || !modelId) {
-      throw new Error(`Invalid --provider-model value "${value}". Expected providerId:modelId[:label].`)
-    }
-    return {
-      providerId,
-      modelId,
-      label: rawLabel || `${providerId.slice(0, 8)}-${modelId}`,
-    }
-  })
+  return parseBaselineTargetValues(values)
 }
 
 const args = parseArgs(process.argv.slice(2))
+
+if (hasFlag(args, '--list-providers')) {
+  console.log(formatProviderTargets(loadProviderIndex()))
+  process.exit(0)
+}
+
 const mode = readMode(firstArg(args, '--mode'))
 const dryRun = hasFlag(args, '--dry-run')
 const allowLive = hasFlag(args, '--allow-live')
