@@ -6,6 +6,7 @@ import type { Locale } from '../i18n'
 import { useUIStore } from './uiStore'
 
 const LOCALE_STORAGE_KEY = 'cc-haha-locale'
+let desktopNotificationsSaveQueue: Promise<void> = Promise.resolve()
 
 function getStoredLocale(): Locale {
   try {
@@ -25,6 +26,7 @@ type SettingsStore = {
   locale: Locale
   theme: ThemeMode
   skipWebFetchPreflight: boolean
+  desktopNotificationsEnabled: boolean
   webSearch: WebSearchSettings
   isLoading: boolean
   error: string | null
@@ -37,6 +39,7 @@ type SettingsStore = {
   setLocale: (locale: Locale) => void
   setTheme: (theme: ThemeMode) => Promise<void>
   setSkipWebFetchPreflight: (enabled: boolean) => Promise<void>
+  setDesktopNotificationsEnabled: (enabled: boolean) => Promise<void>
   setWebSearch: (settings: WebSearchSettings) => Promise<void>
 }
 
@@ -50,6 +53,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   locale: getStoredLocale(),
   theme: useUIStore.getState().theme,
   skipWebFetchPreflight: true,
+  desktopNotificationsEnabled: true,
   webSearch: { mode: 'auto', tavilyApiKey: '', braveApiKey: '' },
   isLoading: false,
   error: null,
@@ -75,6 +79,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         thinkingEnabled: userSettings.alwaysThinkingEnabled !== false,
         theme,
         skipWebFetchPreflight: userSettings.skipWebFetchPreflight !== false,
+        desktopNotificationsEnabled: userSettings.desktopNotificationsEnabled !== false,
         webSearch: normalizeWebSearchSettings(userSettings.webSearch),
         isLoading: false,
         error: null,
@@ -147,6 +152,27 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       await settingsApi.updateUser({ skipWebFetchPreflight: enabled })
     } catch {
       set({ skipWebFetchPreflight: prev })
+    }
+  },
+
+  setDesktopNotificationsEnabled: async (enabled) => {
+    const prev = get().desktopNotificationsEnabled
+    set({ desktopNotificationsEnabled: enabled })
+    const save = desktopNotificationsSaveQueue
+      .catch(() => undefined)
+      .then(async () => {
+        if (get().desktopNotificationsEnabled !== enabled) return
+        await settingsApi.updateUser({ desktopNotificationsEnabled: enabled })
+      })
+
+    desktopNotificationsSaveQueue = save
+
+    try {
+      await save
+    } catch {
+      if (get().desktopNotificationsEnabled === enabled) {
+        set({ desktopNotificationsEnabled: prev })
+      }
     }
   },
 

@@ -15,6 +15,7 @@ const {
   markCompletedAndDismissedMock,
   resetCompletedTasksMock,
   refreshTasksMock,
+  notifyDesktopMock,
   cliTaskStoreSnapshot,
 } = vi.hoisted(() => ({
   sendMock: vi.fn(),
@@ -29,10 +30,15 @@ const {
   markCompletedAndDismissedMock: vi.fn(),
   resetCompletedTasksMock: vi.fn(async () => {}),
   refreshTasksMock: vi.fn(),
+  notifyDesktopMock: vi.fn(),
   cliTaskStoreSnapshot: {
     tasks: [] as Array<{ id: string; subject: string; status: string; activeForm?: string }>,
     sessionId: null as string | null,
   },
+}))
+
+vi.mock('../lib/desktopNotifications', () => ({
+  notifyDesktop: notifyDesktopMock,
 }))
 
 vi.mock('../api/websocket', () => ({
@@ -113,6 +119,7 @@ describe('chatStore history mapping', () => {
     markCompletedAndDismissedMock.mockReset()
     resetCompletedTasksMock.mockReset()
     refreshTasksMock.mockReset()
+    notifyDesktopMock.mockReset()
     cliTaskStoreSnapshot.tasks = []
     cliTaskStoreSnapshot.sessionId = null
     useSessionRuntimeStore.setState({ selections: {} })
@@ -686,6 +693,12 @@ describe('chatStore history mapping', () => {
       type: 'tool_use',
       toolUseId: 'tool-ask-1',
     })
+    expect(notifyDesktopMock).toHaveBeenCalledWith({
+      dedupeKey: 'permission:perm-ask-1',
+      cooldownScope: 'permission-prompt',
+      title: 'Claude Code Haha 需要你的确认',
+      body: 'AskUserQuestion 请求执行，正在等待允许。',
+    })
   })
 
   it('sends permission mode updates to the active session only', () => {
@@ -993,6 +1006,12 @@ describe('chatStore history mapping', () => {
     expect(
       useChatStore.getState().sessions[TEST_SESSION_ID]?.chatState,
     ).toBe('permission_pending')
+    expect(notifyDesktopMock).toHaveBeenCalledWith({
+      dedupeKey: 'computer-use-permission:cu-1',
+      cooldownScope: 'permission-prompt',
+      title: 'Claude Code Haha 需要你的确认',
+      body: 'Open Finder and inspect a file',
+    })
   })
 
   it('keeps delayed text blocks from one streamed assistant turn in a single message', () => {

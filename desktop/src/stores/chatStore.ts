@@ -7,6 +7,7 @@ import { useCLITaskStore } from './cliTaskStore'
 import { useSessionRuntimeStore } from './sessionRuntimeStore'
 import { useTabStore } from './tabStore'
 import { randomSpinnerVerb } from '../config/spinnerVerbs'
+import { notifyDesktop } from '../lib/desktopNotifications'
 import { AGENT_LIFECYCLE_TYPES } from '../types/team'
 import type { MessageEntry } from '../types/session'
 import type { PermissionMode } from '../types/settings'
@@ -670,6 +671,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         break
 
       case 'permission_request':
+        notifyDesktop({
+          dedupeKey: `permission:${msg.requestId}`,
+          cooldownScope: 'permission-prompt',
+          title: 'Claude Code Haha 需要你的确认',
+          body: msg.toolName
+            ? `${msg.toolName} 请求执行，正在等待允许。`
+            : '有一个工具请求正在等待允许。',
+        })
         update((s) => ({
           pendingPermission: {
             requestId: msg.requestId,
@@ -698,6 +707,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         break
 
       case 'computer_use_permission_request':
+        notifyDesktop({
+          dedupeKey: `computer-use-permission:${msg.requestId}`,
+          cooldownScope: 'permission-prompt',
+          title: 'Claude Code Haha 需要你的确认',
+          body: msg.request.reason || 'Computer Use 正在等待允许。',
+        })
         update(() => ({
           pendingComputerUsePermission: {
             requestId: msg.requestId,

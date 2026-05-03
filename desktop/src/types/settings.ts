@@ -27,6 +27,7 @@ export type UserSettings = {
   permissionMode?: PermissionMode
   theme?: ThemeMode
   skipWebFetchPreflight?: boolean
+  desktopNotificationsEnabled?: boolean
   webSearch?: WebSearchSettings
   [key: string]: unknown
 }

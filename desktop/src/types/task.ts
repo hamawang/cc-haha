@@ -2,7 +2,7 @@
 
 export type TaskNotificationConfig = {
   enabled: boolean
-  channels: ('telegram' | 'feishu')[]
+  channels: ('desktop' | 'telegram' | 'feishu')[]
 }
 
 export type CronTask = {

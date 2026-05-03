@@ -31,6 +31,12 @@ import { ClaudeOfficialLogin } from '../components/settings/ClaudeOfficialLogin'
 import { useUpdateStore } from '../stores/updateStore'
 import { formatBytes } from '../lib/formatBytes'
 import { isTauriRuntime } from '../lib/desktopRuntime'
+import {
+  getDesktopNotificationPermission,
+  openDesktopNotificationSettings,
+  requestDesktopNotificationPermission,
+  type DesktopNotificationPermission,
+} from '../lib/desktopNotifications'
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('providers')
@@ -883,16 +889,30 @@ function GeneralSettings() {
     setTheme,
     skipWebFetchPreflight,
     setSkipWebFetchPreflight,
+    desktopNotificationsEnabled,
+    setDesktopNotificationsEnabled,
     webSearch,
     setWebSearch,
   } = useSettingsStore()
   const t = useTranslation()
   const [webSearchDraft, setWebSearchDraft] = useState(webSearch)
+  const [notificationPermission, setNotificationPermission] = useState<DesktopNotificationPermission>('default')
+  const [notificationActionRunning, setNotificationActionRunning] = useState(false)
   const webSearchDirty = JSON.stringify(webSearchDraft) !== JSON.stringify(webSearch)
 
   useEffect(() => {
     setWebSearchDraft(webSearch)
   }, [webSearch])
+
+  useEffect(() => {
+    let cancelled = false
+    getDesktopNotificationPermission().then((permission) => {
+      if (!cancelled) setNotificationPermission(permission)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const EFFORT_LABELS: Record<EffortLevel, string> = {
     low: t('settings.general.effort.low'),
@@ -918,6 +938,46 @@ function GeneralSettings() {
     { value: 'anthropic', label: t('settings.general.webSearch.mode.anthropic') },
     { value: 'disabled', label: t('settings.general.webSearch.mode.disabled') },
   ]
+
+  const notificationStatusLabel: Record<DesktopNotificationPermission, string> = {
+    granted: t('settings.general.notificationsStatusGranted'),
+    denied: t('settings.general.notificationsStatusDenied'),
+    default: t('settings.general.notificationsStatusDefault'),
+    unsupported: t('settings.general.notificationsStatusUnsupported'),
+  }
+
+  const handleDesktopNotificationsToggle = async (enabled: boolean) => {
+    await setDesktopNotificationsEnabled(enabled)
+    if (!enabled) return
+
+    setNotificationActionRunning(true)
+    try {
+      const permission = await requestDesktopNotificationPermission()
+      setNotificationPermission(permission)
+      if (permission === 'denied') {
+        await openDesktopNotificationSettings()
+      }
+    } finally {
+      setNotificationActionRunning(false)
+    }
+  }
+
+  const handleNotificationPermissionAction = async () => {
+    setNotificationActionRunning(true)
+    try {
+      if (notificationPermission === 'denied') {
+        await openDesktopNotificationSettings()
+      } else {
+        const permission = await requestDesktopNotificationPermission()
+        setNotificationPermission(permission)
+        if (permission === 'denied') {
+          await openDesktopNotificationSettings()
+        }
+      }
+    } finally {
+      setNotificationActionRunning(false)
+    }
+  }
 
   return (
     <div className="max-w-xl">
@@ -998,6 +1058,52 @@ function GeneralSettings() {
             </div>
           </div>
         </label>
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-1">{t('settings.general.notificationsTitle')}</h2>
+        <p className="text-sm text-[var(--color-text-tertiary)] mb-3">{t('settings.general.notificationsDescription')}</p>
+        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-container-low)] px-4 py-3">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              aria-label={t('settings.general.notificationsEnabled')}
+              checked={desktopNotificationsEnabled}
+              onChange={(e) => void handleDesktopNotificationsToggle(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-brand)] focus:ring-[var(--color-brand)]"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-[var(--color-text-primary)]">
+                {t('settings.general.notificationsEnabled')}
+              </div>
+              <div className="text-xs text-[var(--color-text-tertiary)] mt-1 leading-5">
+                {desktopNotificationsEnabled
+                  ? t('settings.general.notificationsHintOn')
+                  : t('settings.general.notificationsHintOff')}
+              </div>
+            </div>
+          </label>
+          {desktopNotificationsEnabled && (
+            <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--color-border)]/60 pt-3">
+              <div className="min-w-0 text-xs text-[var(--color-text-tertiary)]">
+                {t('settings.general.notificationsStatus')}: {notificationStatusLabel[notificationPermission]}
+              </div>
+              {notificationPermission !== 'granted' && notificationPermission !== 'unsupported' && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="px-3 whitespace-nowrap"
+                  disabled={notificationActionRunning}
+                  onClick={() => void handleNotificationPermissionAction()}
+                >
+                  {notificationPermission === 'denied'
+                    ? t('settings.general.notificationsOpenSettings')
+                    : t('settings.general.notificationsAuthorize')}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="mt-8">

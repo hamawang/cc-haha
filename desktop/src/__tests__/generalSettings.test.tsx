@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
 import { Settings } from '../pages/Settings'
@@ -12,6 +12,11 @@ import type { ProviderPreset } from '../types/providerPreset'
 const MOCK_DELETE_PROVIDER = vi.fn()
 const MOCK_GET_SETTINGS = vi.fn()
 const MOCK_UPDATE_SETTINGS = vi.fn()
+const desktopNotificationsMock = vi.hoisted(() => ({
+  getDesktopNotificationPermission: vi.fn(),
+  requestDesktopNotificationPermission: vi.fn(),
+  openDesktopNotificationSettings: vi.fn(),
+}))
 const providerStoreState = {
   providers: [] as SavedProvider[],
   activeId: null as string | null,
@@ -46,6 +51,8 @@ vi.mock('../api/providers', () => ({
     updateSettings: MOCK_UPDATE_SETTINGS,
   },
 }))
+
+vi.mock('../lib/desktopNotifications', () => desktopNotificationsMock)
 
 vi.mock('../components/settings/ClaudeOfficialLogin', () => ({
   ClaudeOfficialLogin: () => <div data-testid="claude-official-login" />,
@@ -87,6 +94,12 @@ vi.mock('../components/chat/CodeViewer', () => ({
 describe('Settings > General tab', () => {
   beforeEach(() => {
     MOCK_DELETE_PROVIDER.mockReset()
+    desktopNotificationsMock.getDesktopNotificationPermission.mockReset()
+    desktopNotificationsMock.requestDesktopNotificationPermission.mockReset()
+    desktopNotificationsMock.openDesktopNotificationSettings.mockReset()
+    desktopNotificationsMock.getDesktopNotificationPermission.mockResolvedValue('default')
+    desktopNotificationsMock.requestDesktopNotificationPermission.mockResolvedValue('granted')
+    desktopNotificationsMock.openDesktopNotificationSettings.mockResolvedValue(true)
     MOCK_GET_SETTINGS.mockResolvedValue({})
     MOCK_UPDATE_SETTINGS.mockResolvedValue({})
     providerStoreState.providers = []
@@ -108,12 +121,16 @@ describe('Settings > General tab', () => {
       locale: 'en',
       thinkingEnabled: true,
       skipWebFetchPreflight: true,
+      desktopNotificationsEnabled: true,
       webSearch: { mode: 'auto', tavilyApiKey: '', braveApiKey: '' },
       setThinkingEnabled: vi.fn().mockImplementation(async (enabled: boolean) => {
         useSettingsStore.setState({ thinkingEnabled: enabled })
       }),
       setSkipWebFetchPreflight: vi.fn().mockImplementation(async (enabled: boolean) => {
         useSettingsStore.setState({ skipWebFetchPreflight: enabled })
+      }),
+      setDesktopNotificationsEnabled: vi.fn().mockImplementation(async (enabled: boolean) => {
+        useSettingsStore.setState({ desktopNotificationsEnabled: enabled })
       }),
       setWebSearch: vi.fn().mockImplementation(async (webSearch) => {
         useSettingsStore.setState({ webSearch })
@@ -168,6 +185,49 @@ describe('Settings > General tab', () => {
     fireEvent.click(toggle)
 
     expect(useSettingsStore.getState().setThinkingEnabled).toHaveBeenCalledWith(false)
+  })
+
+  it('lets the user disable desktop system notifications', () => {
+    render(<Settings />)
+
+    fireEvent.click(screen.getByText('General'))
+
+    const toggle = screen.getByLabelText('Enable system notifications')
+    expect(toggle).toBeChecked()
+    fireEvent.click(toggle)
+
+    expect(useSettingsStore.getState().setDesktopNotificationsEnabled).toHaveBeenCalledWith(false)
+    expect(desktopNotificationsMock.requestDesktopNotificationPermission).not.toHaveBeenCalled()
+  })
+
+  it('requests native notification permission when desktop notifications are enabled', async () => {
+    useSettingsStore.setState({ desktopNotificationsEnabled: false })
+    render(<Settings />)
+
+    fireEvent.click(screen.getByText('General'))
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Enable system notifications'))
+    })
+
+    expect(useSettingsStore.getState().setDesktopNotificationsEnabled).toHaveBeenCalledWith(true)
+    await vi.waitFor(() => {
+      expect(desktopNotificationsMock.requestDesktopNotificationPermission).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('opens system settings when enabling notifications finds system denial', async () => {
+    useSettingsStore.setState({ desktopNotificationsEnabled: false })
+    desktopNotificationsMock.requestDesktopNotificationPermission.mockResolvedValue('denied')
+    render(<Settings />)
+
+    fireEvent.click(screen.getByText('General'))
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Enable system notifications'))
+    })
+
+    await vi.waitFor(() => {
+      expect(desktopNotificationsMock.openDesktopNotificationSettings).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('saves WebSearch fallback provider settings', () => {
