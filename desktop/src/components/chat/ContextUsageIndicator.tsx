@@ -53,6 +53,11 @@ function shouldFetchContext(sessionId: string | undefined, draft: boolean) {
   return Boolean(sessionId) && !draft
 }
 
+function isEmptyContextSnapshot(context: SessionContextSnapshot | null, messageCount: number) {
+  if (!context || messageCount > 0) return false
+  return context.totalTokens === 0 && context.percentage === 0
+}
+
 export function ContextUsageIndicator({
   sessionId,
   chatState,
@@ -134,17 +139,18 @@ export function ContextUsageIndicator({
   }, [chatState, messageCount, refresh])
 
   const details = useMemo(() => {
-    if (!context) return []
+    if (!context || isEmptyContextSnapshot(context, messageCount)) return []
     return pickUsedContextCategory(context)
-  }, [context])
+  }, [context, messageCount])
 
-  const hasPlaceholderContext = !context && (
+  const displayContext = isEmptyContextSnapshot(context, messageCount) ? null : context
+  const hasPlaceholderContext = !displayContext && (
     draft || (!loading && messageCount === 0 && (!error || isCliNotRunningError(error)))
   )
-  const isPendingContext = hasPlaceholderContext && !context
-  const percentage = context ? Math.max(0, Math.min(100, context.percentage)) : 0
-  const usedTokens = context?.totalTokens ?? 0
-  const maxTokens = context?.rawMaxTokens ?? 0
+  const isPendingContext = hasPlaceholderContext && !displayContext
+  const percentage = displayContext ? Math.max(0, Math.min(100, displayContext.percentage)) : 0
+  const usedTokens = displayContext?.totalTokens ?? 0
+  const maxTokens = displayContext?.rawMaxTokens ?? 0
   const freeTokens = Math.max(0, maxTokens - usedTokens)
   const strokeColor = percentage >= 90
     ? 'var(--color-error)'
@@ -152,13 +158,13 @@ export function ContextUsageIndicator({
       ? 'var(--color-warning)'
       : 'var(--color-secondary)'
   const ringStyle = {
-    background: context
+    background: displayContext
       ? `conic-gradient(${strokeColor} ${percentage * 3.6}deg, var(--color-surface-container-high) 0deg)`
       : 'var(--color-surface-container-high)',
   }
-  const displayPercent = context ? formatPercent(percentage) : '--'
+  const displayPercent = displayContext ? formatPercent(percentage) : '--'
   const displayModel = firstNonEmpty(context?.model, inspectionModel, fallbackModelLabel)
-  const ariaLabel = context
+  const ariaLabel = displayContext
     ? t('contextIndicator.ariaLabel', { percent: formatPercent(percentage) })
     : isPendingContext
       ? t('contextIndicator.pendingAria')
@@ -179,7 +185,7 @@ export function ContextUsageIndicator({
         }`}
       >
         <span className="relative grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full">
-          {loading && !context ? (
+          {loading && !displayContext ? (
             <span className="absolute inset-[2px] rounded-full border-2 border-[var(--color-text-tertiary)] border-t-transparent motion-safe:animate-spin" />
           ) : (
             <span
@@ -189,7 +195,7 @@ export function ContextUsageIndicator({
               <span className="absolute inset-[3px] rounded-full bg-[var(--color-surface-container-lowest)]" />
               <span
                 className="relative h-[5px] w-[5px] rounded-full"
-                style={{ backgroundColor: context ? strokeColor : 'var(--color-text-tertiary)' }}
+                style={{ backgroundColor: displayContext ? strokeColor : 'var(--color-text-tertiary)' }}
               />
             </span>
           )}
@@ -210,11 +216,11 @@ export function ContextUsageIndicator({
             </div>
           </div>
           <div className="shrink-0 font-mono text-xl font-semibold text-[var(--color-text-primary)]">
-            {context ? formatPercent(percentage) : '--'}
+            {displayContext ? formatPercent(percentage) : '--'}
           </div>
         </div>
 
-        {context ? (
+        {displayContext ? (
           <>
             <div className="mt-4 grid grid-cols-2 gap-3 font-mono text-xs">
               <div>
