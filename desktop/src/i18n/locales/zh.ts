@@ -100,7 +100,7 @@ export const zh: Record<TranslationKey, string> = {
 
   // Settings > Terminal
   'settings.terminal.title': '终端',
-  'settings.terminal.description': '直接运行宿主机命令，用于安装插件、Skills、MCP 等需要命令行的扩展。',
+  'settings.terminal.description': '直接运行宿主机命令，用于安装插件、Skills、MCP 等扩展。桌面端已内置 claude-haha；文档里的 claude <参数> 可替换成 claude-haha <参数>，例如 claude-haha plugin install ... 或 claude-haha mcp add ...',
   'settings.terminal.clear': '清屏',
   'settings.terminal.restart': '重启',
   'settings.terminal.windowTitle': '宿主机 Shell',
@@ -113,6 +113,9 @@ export const zh: Record<TranslationKey, string> = {
   'settings.terminal.status.error': '错误',
   'settings.terminal.status.unavailable': '不可用',
   'terminal.newTab': '新建终端',
+  'terminal.openInTab': '在 Tab 中打开',
+  'terminal.closePanel': '关闭终端面板',
+  'terminal.resizePanel': '调整终端面板大小',
 
   // Settings > Diagnostics
   'settings.diagnostics.title': '诊断',

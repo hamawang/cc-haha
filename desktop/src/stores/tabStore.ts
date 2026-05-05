@@ -14,6 +14,7 @@ export type Tab = {
   title: string
   type: TabType
   status: 'idle' | 'running' | 'error'
+  terminalCwd?: string
 }
 
 type TabPersistence = {
@@ -26,7 +27,7 @@ type TabStore = {
   activeTabId: string | null
 
   openTab: (sessionId: string, title: string, type?: TabType) => void
-  openTerminalTab: () => string
+  openTerminalTab: (cwd?: string) => string
   closeTab: (sessionId: string) => void
   setActiveTab: (sessionId: string) => void
   updateTabTitle: (sessionId: string, title: string) => void
@@ -46,7 +47,14 @@ export const useTabStore = create<TabStore>((set, get) => ({
     const { tabs } = get()
     const existing = tabs.find((t) => t.sessionId === sessionId)
     if (existing) {
-      set({ activeTabId: sessionId })
+      set({
+        tabs: tabs.map((tab) =>
+          tab.sessionId === sessionId && !(tab as Partial<Tab>).type
+            ? { ...tab, type }
+            : tab,
+        ),
+        activeTabId: sessionId,
+      })
     } else {
       set({
         tabs: [...tabs, { sessionId, title, type, status: 'idle' }],
@@ -56,7 +64,7 @@ export const useTabStore = create<TabStore>((set, get) => ({
     get().saveTabs()
   },
 
-  openTerminalTab: () => {
+  openTerminalTab: (cwd) => {
     const { tabs } = get()
     const nextIndex = Math.max(
       0,
@@ -68,7 +76,11 @@ export const useTabStore = create<TabStore>((set, get) => ({
         }),
     ) + 1
     const sessionId = `${TERMINAL_TAB_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    get().openTab(sessionId, `Terminal ${nextIndex}`, 'terminal')
+    set({
+      tabs: [...tabs, { sessionId, title: `Terminal ${nextIndex}`, type: 'terminal', status: 'idle', terminalCwd: cwd }],
+      activeTabId: sessionId,
+    })
+    get().saveTabs()
     return sessionId
   },
 

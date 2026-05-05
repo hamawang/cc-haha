@@ -20,7 +20,7 @@ export async function initializeDesktopServerUrl() {
   }
 
   try {
-    const { invoke } = await import(/* @vite-ignore */ '@tauri-apps/api/core')
+    const { invoke } = await import('@tauri-apps/api/core')
     const serverUrl = await invoke<string>('get_server_url')
     setBaseUrl(serverUrl)
     await waitForHealth(serverUrl)

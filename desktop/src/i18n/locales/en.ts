@@ -98,7 +98,7 @@ export const en = {
 
   // Settings > Terminal
   'settings.terminal.title': 'Terminal',
-  'settings.terminal.description': 'Run host-machine commands for plugin, skill, and MCP setup without leaving the desktop app.',
+  'settings.terminal.description': 'Run host-machine commands for plugin, skill, and MCP setup. The desktop app includes claude-haha; replace documented claude <args> with claude-haha <args>, for example: claude-haha plugin install ... or claude-haha mcp add ...',
   'settings.terminal.clear': 'Clear',
   'settings.terminal.restart': 'Restart',
   'settings.terminal.windowTitle': 'Host shell',
@@ -111,6 +111,9 @@ export const en = {
   'settings.terminal.status.error': 'Error',
   'settings.terminal.status.unavailable': 'Unavailable',
   'terminal.newTab': 'New Terminal',
+  'terminal.openInTab': 'Open in Tab',
+  'terminal.closePanel': 'Close terminal panel',
+  'terminal.resizePanel': 'Resize terminal panel',
 
   // Settings > Diagnostics
   'settings.diagnostics.title': 'Diagnostics',

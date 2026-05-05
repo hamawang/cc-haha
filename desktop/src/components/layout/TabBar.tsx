@@ -1,7 +1,14 @@
 import { forwardRef, useRef, useState, useEffect, useCallback } from 'react'
-import { useTabStore, type Tab } from '../../stores/tabStore'
+import {
+  SCHEDULED_TAB_ID,
+  SETTINGS_TAB_ID,
+  TERMINAL_TAB_PREFIX,
+  useTabStore,
+  type Tab,
+} from '../../stores/tabStore'
 import { useChatStore } from '../../stores/chatStore'
 import { useWorkspacePanelStore } from '../../stores/workspacePanelStore'
+import { useTerminalPanelStore } from '../../stores/terminalPanelStore'
 import { useTranslation } from '../../i18n'
 import { WindowControls, showWindowControls } from './WindowControls'
 import { Folder, FolderOpen, SquareTerminal } from 'lucide-react'
@@ -10,6 +17,21 @@ const TAB_WIDTH = 180
 const DRAG_START_THRESHOLD = 4
 const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
 
+function isSessionTab(tab: Tab | null) {
+  if (!tab) return false
+  const tabType = (tab as Partial<Tab>).type
+  if (tabType === 'session') return true
+  if (tabType) return false
+  return isSessionTabId(tab.sessionId)
+}
+
+function isSessionTabId(tabId: string | null) {
+  if (!tabId) return false
+  return tabId !== SETTINGS_TAB_ID &&
+    tabId !== SCHEDULED_TAB_ID &&
+    !tabId.startsWith(TERMINAL_TAB_PREFIX)
+}
+
 export function TabBar() {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
@@ -17,8 +39,11 @@ export function TabBar() {
   const closeTab = useTabStore((s) => s.closeTab)
   const disconnectSession = useChatStore((s) => s.disconnectSession)
   const activeTab = tabs.find((tab) => tab.sessionId === activeTabId) ?? null
-  const isActiveSessionTab = activeTab?.type === 'session'
+  const isActiveSessionTab = isSessionTab(activeTab) || isSessionTabId(activeTabId)
   const isWorkspacePanelOpen = useWorkspacePanelStore((state) =>
+    activeTabId && isActiveSessionTab ? state.isPanelOpen(activeTabId) : false,
+  )
+  const isTerminalPanelOpen = useTerminalPanelStore((state) =>
     activeTabId && isActiveSessionTab ? state.isPanelOpen(activeTabId) : false,
   )
 
@@ -40,7 +65,7 @@ export function TabBar() {
 
   useEffect(() => {
     if (!isTauri) return
-    import(/* @vite-ignore */ '@tauri-apps/api/window')
+    import('@tauri-apps/api/window')
       .then(({ getCurrentWindow }) => {
         const win = getCurrentWindow()
         startDraggingRef.current = () => win.startDragging()
@@ -82,8 +107,9 @@ export function TabBar() {
   }
 
   const closeTabWithCleanup = useCallback((tab: Tab) => {
-    if (tab.type === 'session') {
+    if (isSessionTab(tab)) {
       useWorkspacePanelStore.getState().clearSession(tab.sessionId)
+      useTerminalPanelStore.getState().clearSession(tab.sessionId)
     }
     closeTab(tab.sessionId)
   }, [closeTab])
@@ -92,7 +118,7 @@ export function TabBar() {
     // Special tabs can always be closed directly
     const tab = tabs.find((t) => t.sessionId === sessionId)
     if (!tab) return
-    if (tab.type !== 'session') {
+    if (!isSessionTab(tab)) {
       closeTabWithCleanup(tab)
       return
     }
@@ -118,7 +144,7 @@ export function TabBar() {
     setContextMenu(null)
     const otherTabs = tabs.filter((t) => t.sessionId !== sessionId)
     for (const tab of otherTabs) {
-      if (tab.type === 'session') disconnectSession(tab.sessionId)
+      if (isSessionTab(tab)) disconnectSession(tab.sessionId)
       closeTabWithCleanup(tab)
     }
   }
@@ -128,7 +154,7 @@ export function TabBar() {
     const idx = tabs.findIndex((t) => t.sessionId === sessionId)
     const leftTabs = tabs.slice(0, idx)
     for (const tab of leftTabs) {
-      if (tab.type === 'session') disconnectSession(tab.sessionId)
+      if (isSessionTab(tab)) disconnectSession(tab.sessionId)
       closeTabWithCleanup(tab)
     }
   }
@@ -138,7 +164,7 @@ export function TabBar() {
     const idx = tabs.findIndex((t) => t.sessionId === sessionId)
     const rightTabs = tabs.slice(idx + 1)
     for (const tab of rightTabs) {
-      if (tab.type === 'session') disconnectSession(tab.sessionId)
+      if (isSessionTab(tab)) disconnectSession(tab.sessionId)
       closeTabWithCleanup(tab)
     }
   }
@@ -146,7 +172,7 @@ export function TabBar() {
   const handleCloseAll = () => {
     setContextMenu(null)
     for (const tab of tabs) {
-      if (tab.type === 'session') disconnectSession(tab.sessionId)
+      if (isSessionTab(tab)) disconnectSession(tab.sessionId)
       closeTabWithCleanup(tab)
     }
   }
@@ -281,7 +307,14 @@ export function TabBar() {
         <ToolbarIconButton
           icon={<SquareTerminal size={17} strokeWidth={1.9} />}
           label={t('tabs.openTerminal')}
-          onClick={() => useTabStore.getState().openTerminalTab()}
+          onClick={() => {
+            if (activeTabId && isActiveSessionTab) {
+              useTerminalPanelStore.getState().togglePanel(activeTabId)
+              return
+            }
+            useTabStore.getState().openTerminalTab()
+          }}
+          active={isTerminalPanelOpen}
         />
         {isActiveSessionTab && activeTabId && (
           <ToolbarIconButton

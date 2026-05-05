@@ -44,9 +44,10 @@ export function ContentRouter() {
           >
             <TerminalSettings
               active={active}
+              cwd={tab.terminalCwd}
               workspace
               testId={`terminal-host-${tab.sessionId}`}
-              onNewTerminal={() => useTabStore.getState().openTerminalTab()}
+              onNewTerminal={() => useTabStore.getState().openTerminalTab(tab.terminalCwd)}
             />
           </div>
         )
