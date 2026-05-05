@@ -43,7 +43,7 @@ export function DiagnosticsSettings() {
     return events
       .filter((event) => event.severity === 'error' || event.severity === 'warn')
       .slice(0, 20)
-      .map((event) => `[${event.timestamp}] ${event.severity.toUpperCase()} ${event.type}${event.sessionId ? ` session=${event.sessionId}` : ''}: ${event.summary}`)
+      .map(formatEventForCopy)
       .join('\n')
   }, [events])
 
@@ -172,7 +172,11 @@ export function DiagnosticsSettings() {
         ) : (
           <div className="divide-y divide-[var(--color-border)]">
             {events.map((event) => (
-              <EventRow key={event.id} event={event} />
+              <EventRow
+                key={event.id}
+                event={event}
+                detailsLabel={t('settings.diagnostics.eventDetails')}
+              />
             ))}
           </div>
         )}
@@ -190,13 +194,20 @@ function Metric({ label, value }: { label: string; value: string }) {
   )
 }
 
-function EventRow({ event }: { event: DiagnosticEvent }) {
+function EventRow({
+  event,
+  detailsLabel,
+}: {
+  event: DiagnosticEvent
+  detailsLabel: string
+}) {
   const severityClass =
     event.severity === 'error'
       ? 'text-[var(--color-error)]'
       : event.severity === 'warn'
         ? 'text-[var(--color-warning)]'
         : 'text-[var(--color-text-tertiary)]'
+  const detailsText = formatDetails(event.details)
 
   return (
     <div className="px-4 py-3 grid grid-cols-[120px_92px_1fr] gap-3 items-start">
@@ -212,7 +223,34 @@ function EventRow({ event }: { event: DiagnosticEvent }) {
           )}
         </div>
         <div className="text-xs text-[var(--color-text-secondary)] mt-1 break-words">{event.summary}</div>
+        {detailsText && (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs text-[var(--color-text-tertiary)] select-none">
+              {detailsLabel}
+            </summary>
+            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-2 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+              {detailsText}
+            </pre>
+          </details>
+        )}
       </div>
     </div>
   )
+}
+
+function formatDetails(details: unknown): string {
+  if (details === null || details === undefined) return ''
+  if (typeof details === 'string') return details
+  try {
+    return JSON.stringify(details, null, 2)
+  } catch {
+    return String(details)
+  }
+}
+
+function formatEventForCopy(event: DiagnosticEvent): string {
+  const header = `[${event.timestamp}] ${event.severity.toUpperCase()} ${event.type}${event.sessionId ? ` session=${event.sessionId}` : ''}`
+  const details = formatDetails(event.details)
+  if (!details) return `${header}: ${event.summary}`
+  return `${header}: ${event.summary}\nDetails:\n${details}`
 }

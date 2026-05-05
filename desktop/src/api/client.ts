@@ -8,6 +8,7 @@ const ENV_BASE_URL =
 const DEFAULT_BASE_URL = ENV_BASE_URL || 'http://127.0.0.1:3456'
 
 let baseUrl = DEFAULT_BASE_URL
+const DIAGNOSTICS_PATH = '/api/diagnostics/events'
 
 function getErrorMessage(status: number, body: unknown) {
   if (body && typeof body === 'object' && 'message' in body && typeof body.message === 'string') {
@@ -71,10 +72,50 @@ async function request<T>(method: string, path: string, body?: unknown, options?
   } catch (err) {
     clearTimeout(timeout)
     if (controller.signal.aborted) {
-      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s`)
+      const timeoutError = new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s`)
+      reportApiFailure(method, path, timeoutError)
+      throw timeoutError
     }
+    reportApiFailure(method, path, err)
     throw err
   }
+}
+
+function reportApiFailure(method: string, path: string, error: unknown) {
+  if (path.startsWith('/api/diagnostics')) return
+
+  const details: Record<string, unknown> = {
+    method,
+    path,
+    errorName: error instanceof Error ? error.name : typeof error,
+    message: error instanceof Error ? error.message : String(error),
+  }
+
+  if (error instanceof ApiError) {
+    details.status = error.status
+    details.response = error.body
+  }
+
+  void rawRecordDiagnosticEvent({
+    type: 'client_api_request_failed',
+    severity: 'warn',
+    summary: `${method} ${path} failed: ${details.message}`,
+    details,
+  })
+}
+
+export function rawRecordDiagnosticEvent(event: {
+  type: string
+  severity?: 'debug' | 'info' | 'warn' | 'error'
+  summary: string
+  sessionId?: string
+  details?: unknown
+}) {
+  return fetch(`${baseUrl}${DIAGNOSTICS_PATH}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(event),
+  }).catch(() => undefined)
 }
 
 export const api = {

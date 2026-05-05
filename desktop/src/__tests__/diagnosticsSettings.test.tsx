@@ -87,6 +87,7 @@ describe('Settings > Diagnostics tab', () => {
     diagnosticsApiMock.getStatus.mockResolvedValue({
       logDir: '/tmp/claude/cc-haha/diagnostics',
       diagnosticsPath: '/tmp/claude/cc-haha/diagnostics/diagnostics.jsonl',
+      cliDiagnosticsPath: '/tmp/claude/cc-haha/diagnostics/cli-diagnostics.jsonl',
       runtimeErrorsPath: '/tmp/claude/cc-haha/diagnostics/runtime-errors.log',
       exportDir: '/tmp/claude/cc-haha/diagnostics/exports',
       retentionDays: 7,
@@ -104,6 +105,10 @@ describe('Settings > Diagnostics tab', () => {
         severity: 'error',
         summary: 'CLI exited during startup with code 1',
         sessionId: 'session-1',
+        details: {
+          exitCode: 1,
+          capturedOutput: 'stderr:\nprovider rejected request',
+        },
       }],
     })
     diagnosticsApiMock.exportBundle.mockResolvedValue({
@@ -131,6 +136,7 @@ describe('Settings > Diagnostics tab', () => {
     expect(screen.getByRole('button', { name: /Copy Error Summary/i })).toBeInTheDocument()
     expect(screen.getByText('cli_start_failed')).toBeInTheDocument()
     expect(screen.getByText('CLI exited during startup with code 1')).toBeInTheDocument()
+    expect(screen.getByText('Details')).toBeInTheDocument()
   })
 
   it('exports a diagnostics bundle from the settings page', async () => {
@@ -159,6 +165,7 @@ describe('Settings > Diagnostics tab', () => {
         writeText: vi.fn().mockRejectedValue(new Error('clipboard blocked')),
       },
     })
+    const writeText = vi.mocked(navigator.clipboard.writeText)
 
     try {
       render(<Settings />)
@@ -169,6 +176,7 @@ describe('Settings > Diagnostics tab', () => {
       await waitFor(() => {
         expect(execCommand).toHaveBeenCalledWith('copy')
       })
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('capturedOutput'))
       const toasts = useUIStore.getState().toasts
       expect(toasts[toasts.length - 1]?.message).toBe('Error summary copied.')
     } finally {

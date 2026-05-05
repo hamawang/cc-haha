@@ -17,6 +17,10 @@ import {
   resolveClaudeCliLauncher,
 } from '../../utils/desktopBundledCli.js'
 
+const MAX_CAPTURED_PROCESS_LINES = 80
+const MAX_CAPTURED_SDK_MESSAGES = 40
+const MAX_CAPTURED_SDK_SUMMARY = 20
+
 type AttachmentRef = {
   type: 'file' | 'image'
   name?: string
@@ -496,8 +500,8 @@ export class ConversationService {
       try {
         const msg = JSON.parse(line)
         session.sdkMessages.push(msg)
-        if (session.sdkMessages.length > 40) {
-          session.sdkMessages.splice(0, 20)
+        if (session.sdkMessages.length > MAX_CAPTURED_SDK_MESSAGES) {
+          session.sdkMessages.splice(0, session.sdkMessages.length - MAX_CAPTURED_SDK_MESSAGES)
         }
         const sdkError = this.extractSdkErrorEvent(msg)
         if (sdkError) {
@@ -604,8 +608,8 @@ export class ConversationService {
             const lines =
               streamName === 'stderr' ? session.stderrLines : session.stdoutLines
             lines.push(this.redactProcessOutput(line))
-            if (lines.length > 20) {
-              lines.splice(0, 10)
+            if (lines.length > MAX_CAPTURED_PROCESS_LINES) {
+              lines.splice(0, lines.length - MAX_CAPTURED_PROCESS_LINES)
             }
           }
         }
@@ -782,10 +786,18 @@ export class ConversationService {
       explicitProviderEnv.ANTHROPIC_MODEL = options.model.trim()
     }
 
+    const cliDiagnosticsPath = diagnosticsService.getCliDiagnosticsPath()
+    try {
+      fs.mkdirSync(path.dirname(cliDiagnosticsPath), { recursive: true })
+    } catch {
+      // Diagnostics must never block session startup.
+    }
+
     return {
       ...cleanEnv,
       CLAUDE_CODE_ENABLE_TASKS: '1',
       CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING: '1',
+      CLAUDE_CODE_DIAGNOSTICS_FILE: cliDiagnosticsPath,
       CALLER_DIR: workDir,
       PWD: workDir,
       ...(sdkUrl
@@ -1122,6 +1134,9 @@ export class ConversationService {
           sdkType: message.type,
           error: typeof message.error === 'string' ? message.error : undefined,
           isApiErrorMessage: message.isApiErrorMessage === true,
+          messageText: this.extractAssistantText(message)
+            ? this.redactProcessOutput(this.extractAssistantText(message))
+            : undefined,
           errorDetails:
             typeof message.errorDetails === 'string'
               ? this.redactProcessOutput(message.errorDetails)
@@ -1141,6 +1156,15 @@ export class ConversationService {
           sdkType: message.type,
           subtype: message.subtype,
           isError: true,
+          result:
+            typeof message.result === 'string'
+              ? this.redactProcessOutput(message.result)
+              : undefined,
+          status:
+            typeof message.status === 'string'
+              ? this.redactProcessOutput(message.status)
+              : undefined,
+          usage: message.usage,
         },
       }
     }
@@ -1149,17 +1173,36 @@ export class ConversationService {
   }
 
   private summarizeSdkMessages(messages: any[]): unknown[] {
-    return messages.slice(-10).map((message) => {
+    return messages.slice(-MAX_CAPTURED_SDK_SUMMARY).map((message) => {
       if (!message || typeof message !== 'object') {
         return message
       }
+      const content = Array.isArray(message.message?.content)
+        ? message.message.content.map((block: unknown) => {
+            if (!block || typeof block !== 'object') return block
+            const typedBlock = block as Record<string, unknown>
+            return {
+              type: typedBlock.type,
+              text:
+                typeof typedBlock.text === 'string'
+                  ? this.redactProcessOutput(typedBlock.text)
+                  : undefined,
+            }
+          })
+        : undefined
       return {
         type: message.type,
         subtype: message.subtype,
         is_error: message.is_error,
         status: typeof message.status === 'string' ? message.status : undefined,
-        result: typeof message.result === 'string' ? message.result : undefined,
-        message: typeof message.message === 'string' ? message.message : undefined,
+        result: typeof message.result === 'string' ? this.redactProcessOutput(message.result) : undefined,
+        error: typeof message.error === 'string' ? this.redactProcessOutput(message.error) : undefined,
+        errorDetails:
+          typeof message.errorDetails === 'string'
+            ? this.redactProcessOutput(message.errorDetails)
+            : undefined,
+        message: typeof message.message === 'string' ? this.redactProcessOutput(message.message) : undefined,
+        content,
       }
     })
   }

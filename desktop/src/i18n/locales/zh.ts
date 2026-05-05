@@ -141,6 +141,9 @@ export const zh: Record<TranslationKey, string> = {
   'settings.diagnostics.confirmClear': '确定清理所有本地诊断日志和已导出的诊断包？',
   'settings.diagnostics.cleared': '诊断日志已清理。',
   'settings.diagnostics.clearFailed': '清理诊断日志失败。',
+  'settings.diagnostics.eventDetails': '详情',
+  'errorBoundary.title': '出现异常。',
+  'errorBoundary.description': '错误已记录到诊断日志。',
 
   // Settings > Claude Official Login
   'settings.claudeOfficialLogin.intro': '使用官方 Claude 模型需要登录你的 Claude.ai 账号。点击下方按钮,浏览器会打开 Claude 官方登录页面,授权后自动回到这里。',
