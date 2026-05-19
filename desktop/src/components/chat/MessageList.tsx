@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo, memo, useState, useCallback, useLayoutEffect, type ReactNode } from 'react'
-import { ArrowDown, BookMarked, Bot, CheckCircle2, ChevronDown, ChevronRight, CircleStop, GitBranch, LoaderCircle, MessageCircle, Settings, Target, XCircle } from 'lucide-react'
+import { ArrowDown, BookMarked, Bot, CheckCircle2, ChevronDown, ChevronRight, CircleStop, LoaderCircle, MessageCircle, Settings, Target, XCircle } from 'lucide-react'
 import { ApiError } from '../../api/client'
 import { sessionsApi, type SessionTurnCheckpoint } from '../../api/sessions'
 import { useChatStore } from '../../stores/chatStore'
@@ -355,37 +355,6 @@ function SelectableChatMessage({
     >
       {children}
       <ChatSelectionMenu selection={selectionMenu} onAdd={addCurrentSelectionToChat} popoverRef={selectionMenuRef} />
-    </div>
-  )
-}
-
-function MessageBranchAction({
-  align,
-  label,
-  loading,
-  onClick,
-}: {
-  align: ChatMessageRole
-  label: string
-  loading?: boolean
-  onClick: () => void
-}) {
-  return (
-    <div
-      className={`pointer-events-none relative z-10 -mt-3 h-0 w-full opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 ${
-        align === 'user' ? 'flex justify-end pr-1' : 'flex justify-start pl-1'
-      }`}
-    >
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={loading}
-        aria-label={label}
-        title={label}
-        className="pointer-events-auto inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--color-border)]/70 bg-[var(--color-surface-container-low)] text-[var(--color-text-tertiary)] transition-colors hover:border-[var(--color-brand)]/35 hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/35 disabled:cursor-wait disabled:opacity-60"
-      >
-        <GitBranch size={13} strokeWidth={2.2} aria-hidden="true" />
-      </button>
     </div>
   )
 }
@@ -1263,20 +1232,11 @@ export const MessageBlock = memo(function MessageBlock({
           role="user"
           content={message.content}
         >
-          <div className="group">
-            <UserMessage
-              content={message.content}
-              attachments={message.attachments}
-            />
-            {branchAction ? (
-              <MessageBranchAction
-                align="user"
-                label={branchAction.label}
-                loading={branchAction.loading}
-                onClick={branchAction.onBranch}
-              />
-            ) : null}
-          </div>
+          <UserMessage
+            content={message.content}
+            attachments={message.attachments}
+            branchAction={branchAction}
+          />
         </SelectableChatMessage>
       )
     case 'assistant_text':
@@ -1287,17 +1247,7 @@ export const MessageBlock = memo(function MessageBlock({
           role="assistant"
           content={message.content}
         >
-          <div className="group">
-            <AssistantMessage content={message.content} />
-            {branchAction ? (
-              <MessageBranchAction
-                align="assistant"
-                label={branchAction.label}
-                loading={branchAction.loading}
-                onClick={branchAction.onBranch}
-              />
-            ) : null}
-          </div>
+          <AssistantMessage content={message.content} branchAction={branchAction} />
         </SelectableChatMessage>
       )
     case 'thinking':

@@ -2339,8 +2339,15 @@ describe('MessageList nested tool calls', () => {
 
     render(<MessageList />)
 
-    const branchButtons = screen.getAllByRole('button', { name: 'Branch from here' })
+    const branchButtons = screen.getAllByRole('button', { name: 'Fork a new conversation' })
     expect(branchButtons).toHaveLength(2)
+    expect(branchButtons[0]!.closest('[data-message-actions]')).toBe(
+      screen.getByRole('button', { name: 'Copy prompt' }).closest('[data-message-actions]')
+    )
+    expect(branchButtons[1]!.closest('[data-message-actions]')).toBe(
+      screen.getByRole('button', { name: 'Copy reply' }).closest('[data-message-actions]')
+    )
+    expect(branchButtons[1]?.getAttribute('title')).toBe('Fork a new conversation')
 
     fireEvent.click(branchButtons[1]!)
 
@@ -2358,7 +2365,7 @@ describe('MessageList nested tool calls', () => {
     const toasts = useUIStore.getState().toasts
     expect(toasts[toasts.length - 1]).toMatchObject({
       type: 'success',
-      message: 'Created branched session "Branched session".',
+      message: 'Created forked conversation "Branched session".',
     })
   })
 
@@ -2390,7 +2397,7 @@ describe('MessageList nested tool calls', () => {
 
     render(<MessageList />)
 
-    expect(screen.queryByRole('button', { name: 'Branch from here' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Fork a new conversation' })).toBeNull()
   })
 
   it('keeps historical sessions readable when turn checkpoint payloads are missing', async () => {

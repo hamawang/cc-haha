@@ -1,13 +1,14 @@
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer'
-import { MessageActionBar } from './MessageActionBar'
+import { MessageActionBar, type MessageBranchAction } from './MessageActionBar'
 import { InlineImageGallery } from './InlineImageGallery'
 
 type Props = {
   content: string
   isStreaming?: boolean
+  branchAction?: MessageBranchAction
 }
 
-export function AssistantMessage({ content, isStreaming }: Props) {
+export function AssistantMessage({ content, isStreaming, branchAction }: Props) {
   if (!content.trim()) return null
 
   const documentLayout = shouldUseDocumentLayout(content)
@@ -36,6 +37,7 @@ export function AssistantMessage({ content, isStreaming }: Props) {
         <MessageActionBar
           copyText={isStreaming ? undefined : content}
           copyLabel="Copy reply"
+          branchAction={branchAction}
           align="start"
         />
       </div>
