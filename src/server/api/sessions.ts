@@ -884,13 +884,14 @@ function isDesktopWorktreeBranchName(branch: string | null): boolean {
 
 async function getRecentProjects(url: URL): Promise<Response> {
   const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '10', 10) || 10, 1), 500)
+  const sessionScanLimit = Math.min(Math.max(limit * 8, 50), 200)
 
   // Return cached response if fresh
   if (recentProjectsCache && Date.now() - recentProjectsCache.timestamp < RECENT_PROJECTS_CACHE_TTL) {
     return Response.json({ projects: recentProjectsCache.projects.slice(0, limit) })
   }
 
-  const { sessions } = await sessionService.listSessions({ limit: 200 })
+  const { sessions } = await sessionService.listSessions({ limit: sessionScanLimit })
   const validSessions = sessions.filter((session) => session.workDirExists && session.workDir)
 
   // First pass: group by logical project root so worktrees stay under the same project.

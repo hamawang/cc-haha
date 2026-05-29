@@ -57,6 +57,8 @@ export type PerSessionState = {
   messages: UIMessage[]
   chatState: ChatState
   connectionState: ConnectionState
+  historyStatus?: 'idle' | 'loading' | 'ready' | 'error'
+  historyError?: string | null
   streamingText: string
   streamingToolInput: string
   activeToolUseId: string | null
@@ -95,6 +97,8 @@ const DEFAULT_SESSION_STATE: PerSessionState = {
   messages: [],
   chatState: 'idle',
   connectionState: 'disconnected',
+  historyStatus: 'idle',
+  historyError: null,
   streamingText: '',
   streamingToolInput: '',
   activeToolUseId: null,
@@ -791,6 +795,8 @@ async function fetchAndMapSessionHistory(sessionId: string) {
   }
 }
 
+const historyLoadsInFlight = new Map<string, Promise<void>>()
+
 export const useChatStore = create<ChatStore>((set, get) => ({
   sessions: {},
 
@@ -800,7 +806,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     void useCLITaskStore.getState().fetchSessionTasks(sessionId)
 
     const existing = get().sessions[sessionId]
-    if (existing && existing.connectionState !== 'disconnected') return
+    if (existing && existing.connectionState !== 'disconnected') {
+      if (
+        existing.messages.length === 0 &&
+        (existing.historyStatus === 'idle' || existing.historyStatus === 'error')
+      ) {
+        void get().loadHistory(sessionId)
+      }
+      return
+    }
 
     set((s) => ({
       sessions: {
@@ -1042,54 +1056,91 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   loadHistory: async (sessionId) => {
-    try {
-      const {
-        uiMessages,
-        activeGoal,
-        restoredNotifications,
-        restoredBackgroundTasks,
-        lastTodos,
-        hasMessagesAfterTaskCompletion,
-      } = await fetchAndMapSessionHistory(sessionId)
-      set((state) => {
-        const session = state.sessions[sessionId]
-        if (!session) return state
-        if (session.messages.length > 0) {
+    const existingLoad = historyLoadsInFlight.get(sessionId)
+    if (existingLoad) return existingLoad
+
+    let load!: Promise<void>
+    load = (async () => {
+      try {
+        set((state) => {
+          const session = state.sessions[sessionId]
+          if (!session) return state
+          return {
+            sessions: updateSessionIn(state.sessions, sessionId, () => ({
+              historyStatus: 'loading',
+              historyError: null,
+            })),
+          }
+        })
+        const {
+          uiMessages,
+          activeGoal,
+          restoredNotifications,
+          restoredBackgroundTasks,
+          lastTodos,
+          hasMessagesAfterTaskCompletion,
+        } = await fetchAndMapSessionHistory(sessionId)
+        set((state) => {
+          const session = state.sessions[sessionId]
+          if (!session) return state
+          if (session.messages.length > 0) {
+            return { sessions: updateSessionIn(state.sessions, sessionId, (s) => ({
+              historyStatus: 'ready',
+              historyError: null,
+              activeGoal: activeGoal ?? s.activeGoal ?? null,
+              agentTaskNotifications: { ...s.agentTaskNotifications, ...restoredNotifications },
+              backgroundAgentTasks: mergeBackgroundAgentTaskRecords(
+                s.backgroundAgentTasks ?? {},
+                restoredBackgroundTasks,
+              ),
+              messages: mergeRestoredHistoryIntoLiveMessages(
+                mergeBackgroundTaskMessages(s.messages, restoredBackgroundTasks),
+                uiMessages,
+              ),
+            })) }
+          }
           return { sessions: updateSessionIn(state.sessions, sessionId, (s) => ({
-            activeGoal: activeGoal ?? s.activeGoal ?? null,
+            historyStatus: 'ready',
+            historyError: null,
+            messages: mergeBackgroundTaskMessages(uiMessages, restoredBackgroundTasks),
+            activeGoal,
             agentTaskNotifications: { ...s.agentTaskNotifications, ...restoredNotifications },
             backgroundAgentTasks: mergeBackgroundAgentTaskRecords(
               s.backgroundAgentTasks ?? {},
               restoredBackgroundTasks,
             ),
-            messages: mergeRestoredHistoryIntoLiveMessages(
-              mergeBackgroundTaskMessages(s.messages, restoredBackgroundTasks),
-              uiMessages,
-            ),
           })) }
+        })
+        if (lastTodos && lastTodos.length > 0) {
+          const taskStore = useCLITaskStore.getState()
+          if (taskStore.sessionId === sessionId && taskStore.tasks.length === 0) taskStore.setTasksFromTodos(lastTodos, sessionId)
+        } else {
+          useCLITaskStore.getState().setTasksFromTodos([], sessionId)
         }
-        return { sessions: updateSessionIn(state.sessions, sessionId, (s) => ({
-          messages: mergeBackgroundTaskMessages(uiMessages, restoredBackgroundTasks),
-          activeGoal,
-          agentTaskNotifications: { ...s.agentTaskNotifications, ...restoredNotifications },
-          backgroundAgentTasks: mergeBackgroundAgentTaskRecords(
-            s.backgroundAgentTasks ?? {},
-            restoredBackgroundTasks,
-          ),
-        })) }
-      })
-      if (lastTodos && lastTodos.length > 0) {
-        const taskStore = useCLITaskStore.getState()
-        if (taskStore.sessionId === sessionId && taskStore.tasks.length === 0) taskStore.setTasksFromTodos(lastTodos, sessionId)
-      } else {
-        useCLITaskStore.getState().setTasksFromTodos([], sessionId)
+        if (hasMessagesAfterTaskCompletion) {
+          useCLITaskStore.getState().markCompletedAndDismissed(sessionId)
+        }
+      } catch (error) {
+        // Session may not have messages yet
+        set((state) => {
+          const session = state.sessions[sessionId]
+          if (!session) return state
+          return {
+            sessions: updateSessionIn(state.sessions, sessionId, () => ({
+              historyStatus: 'error',
+              historyError: error instanceof Error ? error.message : String(error),
+            })),
+          }
+        })
+      } finally {
+        if (historyLoadsInFlight.get(sessionId) === load) {
+          historyLoadsInFlight.delete(sessionId)
+        }
       }
-      if (hasMessagesAfterTaskCompletion) {
-        useCLITaskStore.getState().markCompletedAndDismissed(sessionId)
-      }
-    } catch {
-      // Session may not have messages yet
-    }
+    })()
+
+    historyLoadsInFlight.set(sessionId, load)
+    return load
   },
 
   reloadHistory: async (sessionId) => {
@@ -1109,6 +1160,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         if (session.elapsedTimer) clearInterval(session.elapsedTimer)
         return {
           sessions: updateSessionIn(state.sessions, sessionId, () => ({
+            historyStatus: 'ready',
+            historyError: null,
             messages: mergeBackgroundTaskMessages(uiMessages, restoredBackgroundTasks),
             activeGoal,
             agentTaskNotifications: restoredNotifications,

@@ -47,6 +47,8 @@ type SessionStore = {
   setActiveSession: (id: string | null) => void
 }
 
+let fetchSessionsRequestId = 0
+
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   activeSessionId: null,
@@ -56,9 +58,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   selectedSessionIds: new Set(),
 
   fetchSessions: async (project?: string) => {
+    const requestId = ++fetchSessionsRequestId
     set({ isLoading: true, error: null })
     try {
       const { sessions: raw } = await sessionsApi.list({ project, limit: 100 })
+      if (requestId !== fetchSessionsRequestId) return
       let syncedSessions: SessionListItem[] = []
       set((state) => {
         const currentById = new Map(state.sessions.map((session) => [session.id, session]))
@@ -78,6 +82,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       })
       syncOpenSessionTabTitles(syncedSessions)
     } catch (err) {
+      if (requestId !== fetchSessionsRequestId) return
       set({ error: (err as Error).message, isLoading: false })
     }
   },

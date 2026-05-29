@@ -331,6 +331,18 @@ export function ActiveSession() {
   const streamingText = sessionState?.streamingText ?? ''
   const activeGoal = sessionState?.activeGoal ?? null
   const isEmpty = messages.length === 0 && !streamingText && (session?.messageCount ?? 0) === 0
+  const isHistoryLoading =
+    !isMemberSession &&
+    (session?.messageCount ?? 0) > 0 &&
+    messages.length === 0 &&
+    sessionState?.historyStatus === 'loading'
+  const historyError =
+    !isMemberSession &&
+    (session?.messageCount ?? 0) > 0 &&
+    messages.length === 0 &&
+    sessionState?.historyStatus === 'error'
+      ? sessionState.historyError || t('session.historyLoadFailed')
+      : null
   const visibleMessageCount = messages.length > 0 ? messages.length : session?.messageCount ?? 0
 
   const isActive = chatState !== 'idle' ||
@@ -495,7 +507,18 @@ export function ActiveSession() {
                 </div>
               )}
 
-              <MessageList compact={showRightPanel} />
+              {isHistoryLoading ? (
+                <div role="status" className="flex flex-1 items-center justify-center p-8 text-sm text-[var(--color-text-secondary)]">
+                  <span className="material-symbols-outlined mr-2 animate-spin text-[18px]">progress_activity</span>
+                  {t('common.loading')}
+                </div>
+              ) : historyError ? (
+                <div role="alert" className="flex flex-1 items-center justify-center p-8 text-sm text-[var(--color-error)]">
+                  {historyError}
+                </div>
+              ) : (
+                <MessageList compact={showRightPanel} />
+              )}
             </>
           )}
 

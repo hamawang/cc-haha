@@ -463,12 +463,12 @@ export function McpSettings() {
 
   useEffect(() => {
     let cancelled = false
-    setIsInitialLoading(true)
+    setIsInitialLoading(useMcpStore.getState().servers.length === 0)
 
     const loadServers = async () => {
       try {
         const [recentProjectPaths, privateMcpProjectPaths] = await Promise.all([
-          sessionsApi.getRecentProjects()
+          sessionsApi.getRecentProjects(8)
             .then(({ projects }) => projects.map((project) => project.realPath))
             .catch(() => []),
           mcpApi.projectPaths()
@@ -510,7 +510,7 @@ export function McpSettings() {
     connected: servers.filter((server) => server.status === 'connected').length,
     attention: servers.filter((server) => server.status === 'failed' || server.status === 'needs-auth').length,
   }), [servers])
-  const showListLoading = isInitialLoading || (isLoading && servers.length === 0)
+  const showListLoading = (isInitialLoading || isLoading) && servers.length === 0
 
   const beginCreate = () => {
     setDraft(createEmptyDraft())
@@ -761,7 +761,10 @@ export function McpSettings() {
         <div className="max-w-5xl min-w-0">
           <button
             type="button"
-            onClick={() => setView({ type: 'list' })}
+            onClick={() => {
+              setView({ type: 'list' })
+              selectServer(null)
+            }}
             className="mb-5 inline-flex items-center gap-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
           >
             <span className="material-symbols-outlined text-[18px]">arrow_back</span>
@@ -833,7 +836,10 @@ export function McpSettings() {
         <div className="max-w-5xl min-w-0">
           <button
             type="button"
-            onClick={() => setView({ type: 'list' })}
+            onClick={() => {
+              setView({ type: 'list' })
+              selectServer(null)
+            }}
             className="mb-5 inline-flex items-center gap-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
           >
             <span className="material-symbols-outlined text-[18px]">arrow_back</span>

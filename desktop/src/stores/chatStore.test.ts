@@ -141,6 +141,8 @@ function makeSession(overrides: Partial<PerSessionState> = {}): PerSessionState 
     messages: [],
     chatState: 'streaming',
     connectionState: 'connected',
+    historyStatus: 'idle',
+    historyError: null,
     streamingText: '',
     streamingToolInput: '',
     activeToolUseId: null,
@@ -1667,6 +1669,24 @@ describe('chatStore history mapping', () => {
     expect(sendMock).not.toHaveBeenCalledWith('__settings__', {
       type: 'prewarm_session',
     })
+  })
+
+  it('retries history loading for an already connected empty session', async () => {
+    useChatStore.setState({
+      sessions: {
+        [TEST_SESSION_ID]: makeSession({
+          connectionState: 'connected',
+          chatState: 'idle',
+          messages: [],
+        }),
+      },
+    })
+
+    useChatStore.getState().connectToSession(TEST_SESSION_ID)
+    await Promise.resolve()
+
+    expect(sessionsApi.getMessages).toHaveBeenCalledWith(TEST_SESSION_ID)
+    expect(sendMock).not.toHaveBeenCalledWith(TEST_SESSION_ID, { type: 'prewarm_session' })
   })
 
   it('sends explicit runtime overrides over websocket', () => {
