@@ -51,9 +51,8 @@ async function startTestServer() {
   await fs.mkdir(path.join(tmpDir, 'projects'), { recursive: true })
 
   const { startServer } = await import('../../index.js')
-  const port = 13456 + Math.floor(Math.random() * 1000)
-  server = startServer(port, '127.0.0.1')
-  baseUrl = `http://127.0.0.1:${port}`
+  server = startServer(0, '127.0.0.1')
+  baseUrl = `http://127.0.0.1:${server.port}`
 }
 
 async function api(method: string, path: string, body?: unknown): Promise<{ status: number; data: any }> {

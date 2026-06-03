@@ -129,10 +129,9 @@ describe('Tasks API', () => {
     process.env.CLAUDE_CONFIG_DIR = tmpDir
     await fs.mkdir(path.join(tmpDir, 'projects'), { recursive: true })
 
-    const port = 15500 + Math.floor(Math.random() * 500)
     const { startServer } = await import('../../server/index.js')
-    server = startServer(port, '127.0.0.1')
-    baseUrl = `http://127.0.0.1:${port}`
+    server = startServer(0, '127.0.0.1')
+    baseUrl = `http://127.0.0.1:${server.port}`
   })
 
   afterEach(async () => {

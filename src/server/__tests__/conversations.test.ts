@@ -966,11 +966,10 @@ describe('WebSocket Chat Integration', () => {
     )
     await fs.mkdir(path.join(tmpDir, 'projects'), { recursive: true })
 
-    const port = 15000 + Math.floor(Math.random() * 1000)
     const { startServer } = await import('../index.js')
-    server = startServer(port, '127.0.0.1')
-    baseUrl = `http://127.0.0.1:${port}`
-    wsUrl = `ws://127.0.0.1:${port}`
+    server = startServer(0, '127.0.0.1')
+    baseUrl = `http://127.0.0.1:${server.port}`
+    wsUrl = `ws://127.0.0.1:${server.port}`
   })
 
   afterAll(async () => {
