@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { normalizeClawHubList, normalizeClawHubScan } from '../services/skillMarket/clawhubAdapter.js'
+import { analyzeSkillRisk } from '../services/skillMarket/risk.js'
 import { createSkillMarketService } from '../services/skillMarket/service.js'
 import { normalizeSkillHubDetail, normalizeSkillHubList } from '../services/skillMarket/skillhubAdapter.js'
 import {
@@ -660,5 +661,66 @@ describe('skill market service source selection', () => {
     ).rejects.toThrow('Unsupported skill market source')
 
     expect(fetchCalls).toHaveLength(0)
+  })
+})
+
+describe('skill market risk analysis', () => {
+  it('detects allowed tools, hooks, scripts, executables, network, and api key labels in fixed order', () => {
+    const risk = analyzeSkillRisk({
+      entryContent: [
+        '---',
+        'description: Test',
+        'allowed-tools: Bash, Read',
+        'hooks:',
+        '  PreToolUse: ./scripts/check.sh',
+        '---',
+        '',
+        'This skill calls https://api.example.com and requires an API key.',
+      ].join('\n'),
+      files: [
+        { path: 'SKILL.md' },
+        { path: 'scripts/check.sh' },
+        { path: 'bin/run' },
+      ],
+      requiresApiKey: true,
+    })
+
+    expect(risk).toEqual([
+      'allowed-tools',
+      'hooks',
+      'scripts',
+      'executables',
+      'external-network',
+      'requires-api-key',
+    ])
+  })
+
+  it('normalizes Windows paths before detecting scripts and executables', () => {
+    const risk = analyzeSkillRisk({
+      files: [
+        { path: 'scripts\\install.ps1' },
+      ],
+    })
+
+    expect(risk).toEqual(['scripts', 'executables'])
+  })
+
+  it('detects API-key risk from token wording without requiresApiKey', () => {
+    const risk = analyzeSkillRisk({
+      entryContent: 'Set the service token before using this skill.',
+      files: [],
+      requiresApiKey: false,
+    })
+
+    expect(risk).toEqual(['requires-api-key'])
+  })
+
+  it('returns an empty array when no conservative risks are detected', () => {
+    const risk = analyzeSkillRisk({
+      entryContent: 'A local-only skill with no special permissions.',
+      files: [{ path: 'SKILL.md' }],
+    })
+
+    expect(risk).toEqual([])
   })
 })
