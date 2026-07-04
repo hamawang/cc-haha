@@ -150,7 +150,7 @@ export function createSkillMarketService(options: SkillMarketServiceOptions = {}
     try {
       const result = await cachedCatalog(cacheKey, async () => {
         const payload = await requestJson(fetchImpl, url, 'ClawHub')
-        return normalizeClawHubList(payload)
+        return filterCatalogByQuery(normalizeClawHubList(payload), params.query)
       })
       failureCache.delete(cacheKey)
       return result
@@ -170,7 +170,7 @@ export function createSkillMarketService(options: SkillMarketServiceOptions = {}
     return cachedCatalog(catalogCacheKey('skillhub', url), async () => {
       const payload = await requestJson(fetchImpl, url, 'SkillHub')
       return {
-        ...normalizeSkillHubList(payload),
+        ...filterCatalogByQuery(normalizeSkillHubList(payload), params.query),
         sourceStatus: 'ok',
       }
     })
@@ -412,6 +412,38 @@ function clawHubCatalogCacheKey(params: SkillMarketListParams): string {
 
 function catalogCacheKey(source: 'clawhub' | 'skillhub', url: URL): string {
   return `${source}:${url.toString()}`
+}
+
+function filterCatalogByQuery(result: SkillMarketListResult, query?: string): SkillMarketListResult {
+  const terms = normalizeSearchTerms(query)
+  if (terms.length === 0) {
+    return result
+  }
+
+  return {
+    ...result,
+    items: result.items.filter((item) => {
+      const haystack = [
+        item.slug,
+        item.displayName,
+        item.summary,
+        item.summaryZh,
+        item.owner,
+        item.category,
+        item.license,
+        ...(item.tags ?? []),
+      ].filter(Boolean).join(' ').toLocaleLowerCase()
+      return terms.every((term) => haystack.includes(term))
+    }),
+  }
+}
+
+function normalizeSearchTerms(query?: string): string[] {
+  return (query ?? '')
+    .trim()
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
 }
 
 async function requestJson(fetchImpl: FetchImpl, url: URL, sourceName: string): Promise<unknown> {

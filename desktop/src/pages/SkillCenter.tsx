@@ -117,7 +117,7 @@ export function SkillCenter() {
 
   const handleClearSearch = () => {
     setQuery('')
-    void fetchItems()
+    void fetchItems({ query: '' })
   }
 
   const handleOpenInstalled = (detail: SkillMarketDetail) => {

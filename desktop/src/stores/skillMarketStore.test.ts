@@ -89,6 +89,25 @@ describe('skillMarketStore', () => {
     expect(useSkillMarketStore.getState().error).toBeNull()
   })
 
+  it('allows callers to override the current query for an immediate refresh', async () => {
+    mockedSkillMarketApi.list.mockResolvedValue({
+      items: [],
+      nextCursor: null,
+      source: 'clawhub',
+      sourceStatus: 'ok',
+    })
+    useSkillMarketStore.setState({ query: 'weather' })
+
+    await useSkillMarketStore.getState().fetchItems({ query: '' })
+
+    expect(mockedSkillMarketApi.list).toHaveBeenCalledWith({
+      source: 'auto',
+      sort: 'downloads',
+      q: undefined,
+      limit: 100,
+    })
+  })
+
   it('keeps the resolved fallback source status from the marketplace API', async () => {
     const item = makeItem({ source: 'skillhub', sourceMode: 'fallback' })
     mockedSkillMarketApi.list.mockResolvedValue({

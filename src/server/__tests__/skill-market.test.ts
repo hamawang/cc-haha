@@ -510,6 +510,42 @@ describe('skill market service source selection', () => {
     expect(fetchCalls[0]).toContain('limit=100')
   })
 
+  it('filters catalog results locally when the upstream source ignores query text', async () => {
+    const service = createSkillMarketService({
+      fetchImpl: async () => Response.json({
+        items: [
+          {
+            slug: 'skill-vetter',
+            displayName: 'Skill Vetter',
+            summary: 'Security-first skill vetting for AI agents.',
+            stats: { downloads: 260911, installs: 11988, stars: 1248 },
+            tags: { latest: '1.0.0' },
+            latestVersion: { version: '1.0.0', license: 'Apache-2.0' },
+          },
+          {
+            slug: 'weather',
+            displayName: 'Weather',
+            summary: 'Get current weather and forecasts.',
+            topics: ['forecast'],
+            stats: { downloads: 162000, installs: 7000, stars: 420 },
+            tags: { latest: '1.0.0' },
+            latestVersion: { version: '1.0.0', license: 'MIT' },
+          },
+        ],
+        nextCursor: 'next-page',
+      }),
+    })
+
+    const result = await service.listSkills({ source: 'clawhub', query: 'weather forecast' })
+
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]).toMatchObject({
+      slug: 'weather',
+      displayName: 'Weather',
+    })
+    expect(result.nextCursor).toBe('next-page')
+  })
+
   it('falls back to SkillHub in auto mode when ClawHub fails and marks installed skills', async () => {
     const fetchCalls: string[] = []
     const service = createSkillMarketService({

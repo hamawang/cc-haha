@@ -27,7 +27,7 @@ type SkillMarketStore = {
   setSource: (source: SkillMarketListSource) => void
   setSort: (sort: SkillMarketSort) => void
   setQuery: (query: string) => void
-  fetchItems: () => Promise<void>
+  fetchItems: (options?: { query?: string }) => Promise<void>
   fetchMore: () => Promise<void>
   fetchDetail: (source: SkillMarketSource, slug: string) => Promise<void>
   installSelected: () => Promise<void>
@@ -63,15 +63,16 @@ export const useSkillMarketStore = create<SkillMarketStore>((set, get) => ({
   },
   setQuery: (query) => set({ query }),
 
-  fetchItems: async () => {
+  fetchItems: async (options) => {
     const { source, sort, query } = get()
+    const requestedQuery = options?.query ?? query
     detailRequestSeq += 1
     set({ isLoading: true, isLoadingMore: false, isDetailLoading: false, selectedDetail: null, error: null })
     try {
       const result = await skillMarketApi.list({
         source,
         sort,
-        q: query.trim() || undefined,
+        q: requestedQuery.trim() || undefined,
         limit: MARKET_PAGE_LIMIT,
       })
       set({
