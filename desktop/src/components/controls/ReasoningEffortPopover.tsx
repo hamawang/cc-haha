@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronRight, Zap } from 'lucide-react'
 
 import type { ReasoningEffortLevel } from '../../types/settings'
 
@@ -21,7 +20,7 @@ type PopoverPosition = {
   width: number
 }
 
-const POPOVER_WIDTH = 360
+const POPOVER_WIDTH = 280
 const VIEWPORT_MARGIN = 16
 const POPOVER_GAP = 10
 
@@ -108,15 +107,14 @@ export function ReasoningEffortPopover({
     <div
       ref={popoverRef}
       data-testid="reasoning-effort-popover"
-      className="fixed z-[90] rounded-[22px] border border-[var(--color-border)] bg-[var(--color-surface-container-lowest)] px-6 pb-7 pt-5 shadow-[0_18px_48px_rgba(15,23,42,0.14)]"
+      className="fixed z-[90] rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface-container-lowest)] px-4 pb-4 pt-3.5 shadow-[0_14px_36px_rgba(15,23,42,0.14)]"
       style={{ bottom: position.bottom, left: position.left, width: position.width }}
     >
-      <div className="mb-5 flex items-center justify-between">
-        <div className="flex items-center gap-1 text-[17px] font-semibold text-[var(--color-text-secondary)]">
-          <span>{labels[value]}</span>
-          <ChevronRight aria-hidden="true" className="h-5 w-5 text-[var(--color-outline)]" strokeWidth={2.2} />
-        </div>
-        <Zap aria-hidden="true" className="h-6 w-6 text-[var(--color-outline)]" strokeWidth={2} />
+      <div
+        data-testid="reasoning-effort-label"
+        className="mb-3 text-[15px] font-semibold text-[var(--color-text-secondary)]"
+      >
+        {labels[value]}
       </div>
 
       <div
@@ -128,7 +126,7 @@ export function ReasoningEffortPopover({
         aria-valuemax={maxIndex}
         aria-valuenow={selectedIndex}
         aria-valuetext={labels[value]}
-        className="group relative flex h-12 touch-none cursor-pointer items-center outline-none focus-visible:ring-2 focus-visible:ring-[#3798f7] focus-visible:ring-offset-4 focus-visible:ring-offset-[var(--color-surface-container-lowest)]"
+        className="group relative flex h-11 touch-none cursor-pointer items-center outline-none focus-visible:ring-2 focus-visible:ring-[#3798f7] focus-visible:ring-offset-4 focus-visible:ring-offset-[var(--color-surface-container-lowest)]"
         onClick={(event) => selectFromClientX(event.clientX)}
         onPointerDown={(event) => {
           draggingRef.current = true
@@ -171,7 +169,10 @@ export function ReasoningEffortPopover({
           }
         }}
       >
-        <div className="absolute inset-x-0 h-10 overflow-hidden rounded-full bg-[var(--color-surface-container-high)] shadow-[inset_0_0_0_1px_var(--color-border)]">
+        <div
+          data-testid="reasoning-effort-track"
+          className="absolute inset-x-0 h-[30px] overflow-hidden rounded-full bg-[var(--color-surface-container-high)] shadow-[inset_0_0_0_1px_var(--color-border)]"
+        >
           <div
             data-testid="reasoning-effort-fill"
             className="h-full rounded-full bg-[#3798f7] transition-[width] duration-200 motion-reduce:transition-none"
@@ -191,7 +192,8 @@ export function ReasoningEffortPopover({
 
         <div
           aria-hidden="true"
-          className="absolute top-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--color-border)] bg-white shadow-[0_3px_9px_rgba(15,23,42,0.14)] transition-[left] duration-200 motion-reduce:transition-none"
+          data-testid="reasoning-effort-thumb"
+          className="absolute top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--color-border)] bg-white shadow-[0_3px_9px_rgba(15,23,42,0.14)] transition-[left] duration-200 motion-reduce:transition-none"
           style={{ left: `${fillPercent}%` }}
         />
       </div>

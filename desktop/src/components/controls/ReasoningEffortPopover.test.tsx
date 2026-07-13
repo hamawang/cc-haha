@@ -40,6 +40,19 @@ function renderPopover(overrides: Partial<React.ComponentProps<typeof ReasoningE
 }
 
 describe('ReasoningEffortPopover', () => {
+  it('keeps the effort visual compact without non-functional icon controls', () => {
+    renderPopover()
+
+    const popover = screen.getByTestId('reasoning-effort-popover')
+    expect(popover).toHaveStyle({ width: '280px' })
+    expect(popover).toHaveClass('px-4', 'pb-4', 'pt-3.5')
+    expect(popover.querySelectorAll('svg')).toHaveLength(0)
+    expect(screen.getByTestId('reasoning-effort-label')).toHaveClass('mb-3', 'text-[15px]')
+    expect(screen.getByRole('slider', { name: '推理强度' })).toHaveClass('h-11')
+    expect(screen.getByTestId('reasoning-effort-track')).toHaveClass('h-[30px]')
+    expect(screen.getByTestId('reasoning-effort-thumb')).toHaveClass('h-10', 'w-10')
+  })
+
   it('renders every model-supported stop and exposes the selected localized value', () => {
     renderPopover()
 
