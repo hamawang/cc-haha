@@ -20,6 +20,10 @@ import { createUpdateSmokeUpdaterFromEnv } from './services/updateSmoke'
 import { ElectronTerminalService, type TerminalSpawnInput } from './services/terminal'
 import { ElectronPreviewService, type PreviewBounds } from './services/preview'
 import {
+  configurePreviewSessionPermissions,
+  PREVIEW_SESSION_PARTITION,
+} from './services/previewSession'
+import {
   applyStartupPortableMode,
   getAppMode,
   setAppMode,
@@ -185,11 +189,13 @@ function getPreviewService() {
       const view = new WebContentsView({
         webPreferences: {
           preload: previewPreloadPath(),
+          partition: PREVIEW_SESSION_PARTITION,
           contextIsolation: true,
           nodeIntegration: false,
           sandbox: true,
         },
       })
+      configurePreviewSessionPermissions(view.webContents.session)
       installPreviewNavigationGuards(view.webContents, { openExternal: openExternalUrl })
       return view
     },
