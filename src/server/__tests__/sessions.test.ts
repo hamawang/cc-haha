@@ -5752,8 +5752,9 @@ describe('Sessions API', () => {
     const res = await fetch(`${baseUrl}/api/sessions/${sessionId}/chat/status`)
     expect(res.status).toBe(200)
 
-    const body = (await res.json()) as { state: string }
+    const body = (await res.json()) as { state: string; activityState: string }
     expect(body.state).toBe('idle')
+    expect(body.activityState).toBe('idle')
   })
 
   it('POST /api/sessions/:id/chat should queue a message', async () => {
@@ -5773,6 +5774,13 @@ describe('Sessions API', () => {
     const body = (await res.json()) as { messageId: string; status: string }
     expect(body.status).toBe('queued')
     expect(body.messageId).toBeTruthy()
+
+    const statusRes = await fetch(`${baseUrl}/api/sessions/${sessionId}/chat/status`)
+    const status = (await statusRes.json()) as { state: string; activityState: string }
+    expect(status.state).toBe('thinking')
+    expect(status.activityState).toBe('running')
+
+    await fetch(`${baseUrl}/api/sessions/${sessionId}/chat/stop`, { method: 'POST' })
   })
 
   it('POST /api/sessions/:id/chat/stop should reset state to idle', async () => {
@@ -5784,7 +5792,8 @@ describe('Sessions API', () => {
 
     // Verify state is idle
     const statusRes = await fetch(`${baseUrl}/api/sessions/${sessionId}/chat/status`)
-    const status = (await statusRes.json()) as { state: string }
+    const status = (await statusRes.json()) as { state: string; activityState: string }
     expect(status.state).toBe('idle')
+    expect(status.activityState).toBe('idle')
   })
 })

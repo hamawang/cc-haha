@@ -23,6 +23,7 @@ const {
   updateSessionPermissionModeMock,
   sessionStoreSnapshot,
   cliTaskStoreSnapshot,
+  connectionStateHandlers,
 } = vi.hoisted(() => ({
   sendMock: vi.fn(),
   getMemberBySessionIdMock: vi.fn<(sessionId: string) => any>(() => null),
@@ -58,6 +59,7 @@ const {
     tasks: [] as Array<{ id: string; subject: string; status: string; activeForm?: string }>,
     sessionId: null as string | null,
   },
+  connectionStateHandlers: new Map<string, (state: 'connecting' | 'connected' | 'reconnecting' | 'disconnected') => void>(),
 }))
 
 vi.mock('../lib/desktopNotifications', () => ({
@@ -68,6 +70,11 @@ vi.mock('../api/websocket', () => ({
   wsManager: {
     connect: vi.fn(),
     disconnect: vi.fn(),
+    onConnectionState: vi.fn((sessionId: string, handler: (state: 'connecting' | 'connected' | 'reconnecting' | 'disconnected') => void) => {
+      connectionStateHandlers.set(sessionId, handler)
+      handler('connecting')
+      return () => connectionStateHandlers.delete(sessionId)
+    }),
     onMessage: vi.fn(() => () => {}),
     clearHandlers: vi.fn(),
     send: sendMock,
@@ -280,8 +287,11 @@ describe('chatStore history mapping', () => {
     updateTabStatusMock.mockReset()
     updateSessionTitleMock.mockReset()
     updateSessionMessageCountMock.mockReset()
+    connectionStateHandlers.clear()
     vi.mocked(sessionsApi.getMessages).mockReset()
     vi.mocked(sessionsApi.getMessages).mockResolvedValue({ messages: [] })
+    vi.mocked(sessionsApi.getSlashCommands).mockReset()
+    vi.mocked(sessionsApi.getSlashCommands).mockResolvedValue({ commands: [] })
     sessionStoreSnapshot.sessions = []
     cliTaskStoreSnapshot.tasks = []
     cliTaskStoreSnapshot.sessionId = null
@@ -2341,6 +2351,104 @@ describe('chatStore history mapping', () => {
     })
   })
 
+  it('can observe a known empty session without prewarming it', () => {
+    sessionStoreSnapshot.sessions = [{
+      id: TEST_SESSION_ID,
+      title: 'Observed Session',
+      createdAt: '2026-06-20T10:00:00.000Z',
+      modifiedAt: '2026-06-20T10:00:00.000Z',
+      messageCount: 0,
+      projectPath: '/workspace/project',
+      workDir: '/workspace/project',
+      workDirExists: true,
+    }]
+
+    useChatStore.getState().connectToSession(TEST_SESSION_ID, { prewarm: false })
+
+    expect(sendMock).not.toHaveBeenCalledWith(TEST_SESSION_ID, {
+      type: 'prewarm_session',
+    })
+  })
+
+  it('can connect a read-only companion without applying saved runtime selection', () => {
+    sessionStoreSnapshot.sessions = [{
+      id: TEST_SESSION_ID,
+      title: 'Observed Session',
+      createdAt: '2026-06-20T10:00:00.000Z',
+      modifiedAt: '2026-06-20T10:00:00.000Z',
+      messageCount: 1,
+      projectPath: '/workspace/project',
+      workDir: '/workspace/project',
+      workDirExists: true,
+    }]
+    useSessionRuntimeStore.getState().setSelection(TEST_SESSION_ID, {
+      providerId: 'provider-1',
+      modelId: 'kimi-k2.6',
+      effortLevel: 'high',
+    })
+
+    useChatStore.getState().connectToSession(TEST_SESSION_ID, {
+      prewarm: false,
+      applyRuntimeSelection: false,
+    })
+
+    expect(sendMock).not.toHaveBeenCalledWith(TEST_SESSION_ID, expect.objectContaining({
+      type: 'set_runtime_config',
+    }))
+    expect(sendMock).not.toHaveBeenCalledWith(TEST_SESSION_ID, {
+      type: 'prewarm_session',
+    })
+  })
+
+  it('connects a scoped pet client without fetching transcript, commands, or tasks', () => {
+    useChatStore.getState().connectToSession(TEST_SESSION_ID, {
+      prewarm: false,
+      applyRuntimeSelection: false,
+      minimalBootstrap: true,
+    })
+
+    expect(fetchSessionTasksMock).not.toHaveBeenCalled()
+    expect(sessionsApi.getMessages).not.toHaveBeenCalled()
+    expect(sessionsApi.getSlashCommands).not.toHaveBeenCalled()
+  })
+
+  it('blocks sends across reconnects until a fresh authoritative snapshot arrives', () => {
+    useChatStore.getState().connectToSession(TEST_SESSION_ID, {
+      prewarm: false,
+      applyRuntimeSelection: false,
+    })
+    const onConnectionState = connectionStateHandlers.get(TEST_SESSION_ID)
+    expect(onConnectionState).toBeTypeOf('function')
+    expect(useChatStore.getState().sessions[TEST_SESSION_ID]).toMatchObject({
+      connectionState: 'connecting',
+      connectionSnapshotReady: false,
+    })
+
+    onConnectionState?.('connected')
+    expect(useChatStore.getState().sessions[TEST_SESSION_ID]).toMatchObject({
+      connectionState: 'connected',
+      connectionSnapshotReady: false,
+    })
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'permission_requests_snapshot',
+      toolRequestIds: [],
+      computerUseRequestIds: [],
+      turnActive: false,
+    })
+    expect(useChatStore.getState().sessions[TEST_SESSION_ID]?.connectionSnapshotReady).toBe(true)
+
+    onConnectionState?.('reconnecting')
+    expect(useChatStore.getState().sessions[TEST_SESSION_ID]).toMatchObject({
+      connectionState: 'reconnecting',
+      connectionSnapshotReady: false,
+    })
+    onConnectionState?.('connected')
+    expect(useChatStore.getState().sessions[TEST_SESSION_ID]).toMatchObject({
+      connectionState: 'connected',
+      connectionSnapshotReady: false,
+    })
+  })
+
   it('does not prewarm team member sessions', () => {
     getMemberBySessionIdMock.mockReturnValue({
       agentId: 'reviewer@test-team',
@@ -2626,6 +2734,7 @@ describe('chatStore history mapping', () => {
     })
 
     let session = useChatStore.getState().sessions[TEST_SESSION_ID]
+    expect(session?.connectionSnapshotReady).toBe(true)
     expect(Object.keys(session?.pendingPermissions ?? {})).toEqual(['perm-read-2'])
     expect(session?.pendingPermission?.requestId).toBe('perm-read-2')
     expect(Object.keys(session?.pendingComputerUsePermissions ?? {})).toEqual(['cu-2'])

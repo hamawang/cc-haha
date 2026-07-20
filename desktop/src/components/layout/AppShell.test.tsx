@@ -14,9 +14,18 @@ const mocks = vi.hoisted(() => ({
   setActiveTab: vi.fn(),
   openTab: vi.fn(),
   openTraceTab: vi.fn(),
+  getDesktopUiPreferences: vi.fn(),
+  updatePetPreferences: vi.fn(),
   tabState: {
     activeTabId: null as string | null,
     tabs: [] as Array<{ sessionId: string; title: string; type: string; status: string }>,
+  },
+}))
+
+vi.mock('../../api/desktopUiPreferences', () => ({
+  desktopUiPreferencesApi: {
+    getPreferences: mocks.getDesktopUiPreferences,
+    updatePetPreferences: mocks.updatePetPreferences,
   },
 }))
 
@@ -128,6 +137,38 @@ describe('AppShell boot flow', () => {
     mocks.initializeDesktopServerUrl.mockResolvedValue('http://127.0.0.1:3456')
     mocks.fetchAll.mockResolvedValue(undefined)
     mocks.restoreTabs.mockResolvedValue(undefined)
+    mocks.getDesktopUiPreferences.mockResolvedValue({
+      exists: true,
+      preferences: {
+        schemaVersion: 3,
+        sidebar: {},
+        profile: {},
+        pet: {
+          enabled: false,
+          selectedPetId: 'dada-code',
+          size: 144,
+          collapsed: false,
+          motionEnabled: true,
+          lastSessionId: null,
+        },
+      },
+    })
+    mocks.updatePetPreferences.mockResolvedValue({
+      ok: true,
+      preferences: {
+        schemaVersion: 3,
+        sidebar: {},
+        profile: {},
+        pet: {
+          enabled: false,
+          selectedPetId: 'dada-code',
+          size: 144,
+          collapsed: false,
+          motionEnabled: true,
+          lastSessionId: null,
+        },
+      },
+    })
     mocks.openTab.mockReset()
     mocks.openTraceTab.mockReset()
     mocks.setActiveTab.mockImplementation((sessionId: string) => {
@@ -193,6 +234,26 @@ describe('AppShell boot flow', () => {
     })
   })
 
+  it('keeps the pet selection synchronized with the main window current task', async () => {
+    mocks.isTauriRuntime = true
+    mocks.tabState.activeTabId = 'session-current'
+    mocks.tabState.tabs = [{
+      sessionId: 'session-current',
+      title: 'Current session',
+      type: 'session',
+      status: 'running',
+    }]
+
+    render(<AppShell />)
+
+    await screen.findByText('sidebar loaded')
+    await waitFor(() => {
+      expect(mocks.updatePetPreferences).toHaveBeenCalledWith({
+        lastSessionId: 'session-current',
+      })
+    })
+  })
+
   it('opens a trace tab from a session-scoped trace deep link', async () => {
     window.history.pushState({}, '', '/?traceSessionId=session-deep-link')
 
@@ -244,6 +305,49 @@ describe('AppShell boot flow', () => {
 
     expect(useUIStore.getState().pendingSettingsTab).toBe('about')
     expect(mocks.openTab).toHaveBeenCalledWith('__settings__', 'Settings', 'settings')
+  })
+
+  it('restores an enabled pet window and routes pet session navigation', async () => {
+    mocks.isTauriRuntime = true
+    mocks.getDesktopUiPreferences.mockResolvedValueOnce({
+      exists: true,
+      preferences: {
+        schemaVersion: 3,
+        sidebar: {},
+        profile: {},
+        pet: {
+          enabled: true,
+          selectedPetId: 'dada-code',
+          size: 144,
+          collapsed: false,
+          motionEnabled: true,
+          lastSessionId: 'session-pet',
+        },
+      },
+    })
+    const show = vi.fn().mockResolvedValue(undefined)
+    let navigate: ((sessionId: string) => void) | undefined
+    window.desktopHost = {
+      isDesktop: true,
+      pets: {
+        show,
+        onNavigateSession: vi.fn((handler: (sessionId: string) => void) => {
+          navigate = handler
+          return Promise.resolve(vi.fn())
+        }),
+      },
+      window: {
+        onNativeMenuNavigate: vi.fn().mockResolvedValue(vi.fn()),
+      },
+    } as any
+
+    render(<AppShell />)
+
+    await screen.findByText('sidebar loaded')
+    await waitFor(() => expect(show).toHaveBeenCalledTimes(1))
+    act(() => navigate?.('session-pet'))
+    expect(mocks.openTab).toHaveBeenCalledWith('session-pet', 'Session', 'session')
+    expect(mocks.connectToSession).toHaveBeenCalledWith('session-pet')
   })
 
   it('shows the H5 connection view in browser mode when startup needs H5 auth', async () => {

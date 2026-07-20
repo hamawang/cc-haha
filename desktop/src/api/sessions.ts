@@ -9,6 +9,11 @@ export type SessionsResponse = {
   total: number
   index?: LocalIndexStatus
 }
+export type PetSessionRuntimeStatus = 'waiting' | 'failed' | 'review' | 'running' | 'idle'
+export type SessionChatStatusResponse = {
+  state: 'idle' | 'thinking' | 'compacting' | 'tool_executing'
+  activityState: PetSessionRuntimeStatus
+}
 type MessagesResponse = {
   messages: MessageEntry[]
   taskNotifications?: AgentTaskNotification[]
@@ -330,6 +335,10 @@ export const sessionsApi = {
 
   getMessages(sessionId: string) {
     return api.get<MessagesResponse>(`/api/sessions/${sessionId}/messages`)
+  },
+
+  getChatStatus(sessionId: string, signal?: AbortSignal) {
+    return api.get<SessionChatStatusResponse>(`/api/sessions/${sessionId}/chat/status`, { signal })
   },
 
   getTrace(sessionId: string) {

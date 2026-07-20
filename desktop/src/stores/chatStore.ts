@@ -88,6 +88,8 @@ export type PerSessionState = {
   messages: UIMessage[]
   chatState: ChatState
   connectionState: ConnectionState
+  /** True after the server's authoritative reconnect snapshot has arrived. */
+  connectionSnapshotReady?: boolean
   historyStatus?: 'idle' | 'loading' | 'ready' | 'error'
   historyError?: string | null
   streamingText: string
@@ -147,6 +149,7 @@ const DEFAULT_SESSION_STATE: PerSessionState = {
   messages: [],
   chatState: 'idle',
   connectionState: 'disconnected',
+  connectionSnapshotReady: false,
   historyStatus: 'idle',
   historyError: null,
   streamingText: '',
@@ -259,7 +262,14 @@ type ChatStore = {
   sessions: Record<string, PerSessionState>
 
   getSession: (sessionId: string) => PerSessionState
-  connectToSession: (sessionId: string) => void
+  connectToSession: (
+    sessionId: string,
+    options?: {
+      prewarm?: boolean
+      applyRuntimeSelection?: boolean
+      minimalBootstrap?: boolean
+    },
+  ) => void
   disconnectSession: (sessionId: string) => void
   sendMessage: (
     sessionId: string,
@@ -1054,14 +1064,17 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   getSession: (sessionId) => get().sessions[sessionId] ?? createDefaultSessionState(),
 
-  connectToSession: (sessionId) => {
-    void useCLITaskStore.getState().fetchSessionTasks(sessionId)
+  connectToSession: (sessionId, options) => {
+    if (!options?.minimalBootstrap) {
+      void useCLITaskStore.getState().fetchSessionTasks(sessionId)
+    }
 
     const existing = get().sessions[sessionId]
     if (existing && existing.connectionState !== 'disconnected') {
       if (
         existing.messages.length === 0 &&
-        (existing.historyStatus === 'idle' || existing.historyStatus === 'error')
+        (existing.historyStatus === 'idle' || existing.historyStatus === 'error') &&
+        !options?.minimalBootstrap
       ) {
         void get().loadHistory(sessionId)
       }
@@ -1074,6 +1087,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         [sessionId]: {
           ...createDefaultSessionState(),
           connectionState: 'connecting',
+          connectionSnapshotReady: false,
           messages: existing?.messages ?? [],
           activeGoal: existing?.activeGoal ?? null,
           composerDraft: existing?.composerDraft ?? null,
@@ -1084,18 +1098,31 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     wsManager.clearHandlers(sessionId)
     wsManager.connect(sessionId)
+    wsManager.onConnectionState(sessionId, (connectionState) => {
+      if (!get().sessions[sessionId]) return
+      set((s) => ({
+        sessions: updateSessionIn(s.sessions, sessionId, () => ({
+          connectionState,
+          connectionSnapshotReady: false,
+        })),
+      }))
+    })
     wsManager.onMessage(sessionId, (msg) => {
       if (msg.type === 'connected') {
-        set((s) => ({ sessions: updateSessionIn(s.sessions, sessionId, () => ({ connectionState: 'connected' })) }))
+        set((s) => ({ sessions: updateSessionIn(s.sessions, sessionId, () => ({
+          connectionState: 'connected',
+          connectionSnapshotReady: false,
+        })) }))
       }
       get().handleServerMessage(sessionId, msg)
     })
 
     const runtimeSelection = useSessionRuntimeStore.getState().selections[sessionId]
-    if (runtimeSelection) {
+    if (runtimeSelection && options?.applyRuntimeSelection !== false) {
       wsManager.send(sessionId, { type: 'set_runtime_config', ...runtimeSelection })
     }
     if (
+      options?.prewarm !== false &&
       !sessionId.startsWith('__') &&
       !useTeamStore.getState().getMemberBySessionId(sessionId) &&
       shouldPrewarmSession(sessionId)
@@ -1103,18 +1130,20 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       wsManager.send(sessionId, { type: 'prewarm_session' })
     }
 
-    get().loadHistory(sessionId)
-    sessionsApi.getSlashCommands(sessionId)
-      .then(({ commands }) => {
-        if (get().sessions[sessionId]) {
-          set((s) => ({ sessions: updateSessionIn(s.sessions, sessionId, () => ({ slashCommands: commands })) }))
-        }
-      })
-      .catch(() => {
-        if (get().sessions[sessionId]) {
-          set((s) => ({ sessions: updateSessionIn(s.sessions, sessionId, () => ({ slashCommands: [] })) }))
-        }
-      })
+    if (!options?.minimalBootstrap) {
+      get().loadHistory(sessionId)
+      sessionsApi.getSlashCommands(sessionId)
+        .then(({ commands }) => {
+          if (get().sessions[sessionId]) {
+            set((s) => ({ sessions: updateSessionIn(s.sessions, sessionId, () => ({ slashCommands: commands })) }))
+          }
+        })
+        .catch(() => {
+          if (get().sessions[sessionId]) {
+            set((s) => ({ sessions: updateSessionIn(s.sessions, sessionId, () => ({ slashCommands: [] })) }))
+          }
+        })
+    }
   },
 
   disconnectSession: (sessionId) => {
@@ -2372,6 +2401,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             remainingComputerUsePermissions.length > 0
 
           return {
+            connectionSnapshotReady: true,
             pendingPermissions,
             pendingPermission: remainingPermissions[remainingPermissions.length - 1] ?? null,
             pendingComputerUsePermissions,

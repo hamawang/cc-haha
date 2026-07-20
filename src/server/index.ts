@@ -32,8 +32,16 @@ import { H5AccessService } from './services/h5AccessService.js'
 import { refreshDisconnectGraceMs } from './ws/disconnectGraceConfig.js'
 import {
   hasConfiguredLocalAccessToken,
+  hasConfiguredPetAccessToken,
   isLocalAccessAuthorized,
+  isPetAccessAuthorized,
 } from './localAccessAuth.js'
+import {
+  getPetScopedSessionId,
+  isPetHttpRequestAllowed,
+  isPetSessionInProjection,
+  PET_SESSION_LIMIT,
+} from './petAccessPolicy.js'
 
 function readArgValue(flag: string): string | undefined {
   const args = process.argv.slice(2)
@@ -226,14 +234,49 @@ export function startServer(port = PORT, host = HOST) {
         const origin = req.headers.get('Origin')
         const clientAddress = server.requestIP(req)?.address ?? null
         const localTokenOverride = url.searchParams.get('localToken') ?? url.searchParams.get('token')
+        // Browser WebSockets cannot set Authorization headers. Keep the pet
+        // query-token exception scoped to /ws; REST pet access remains bearer-only.
+        const petTokenOverride = url.pathname.startsWith('/ws/')
+          ? url.searchParams.get('token')
+          : null
+        const petAccessAuthorized = isPetAccessAuthorized(req, petTokenOverride)
+        if (petAccessAuthorized && !isPetHttpRequestAllowed(req, url)) {
+          return Response.json(
+            {
+              error: 'Forbidden',
+              message: 'The pet token cannot access this capability.',
+            },
+            { status: 403 },
+          )
+        }
+        const petScopedSessionId = petAccessAuthorized
+          ? getPetScopedSessionId(url.pathname)
+          : null
+        if (petScopedSessionId) {
+          const projection = await sessionService.listSessions({
+            limit: PET_SESSION_LIMIT,
+            offset: 0,
+          })
+          if (!isPetSessionInProjection(petScopedSessionId, projection.sessions)) {
+            return Response.json(
+              {
+                error: 'Forbidden',
+                message: 'The pet token cannot access this session.',
+              },
+              { status: 403 },
+            )
+          }
+        }
         const sdkSessionId = url.pathname.startsWith('/sdk/')
           ? url.pathname.split('/').pop() || ''
           : ''
         const sdkToken = url.searchParams.get('token')
         const h5RequestContext = {
           clientAddress,
-          localAccessTokenConfigured: hasConfiguredLocalAccessToken(),
-          localAccessAuthorized: isLocalAccessAuthorized(req, localTokenOverride),
+          localAccessTokenConfigured:
+            hasConfiguredLocalAccessToken() || hasConfiguredPetAccessToken(),
+          localAccessAuthorized:
+            isLocalAccessAuthorized(req, localTokenOverride) || petAccessAuthorized,
           internalSdkAuthorized: Boolean(
             sdkSessionId && sdkToken && conversationService.authorizeSdkConnection(sdkSessionId, sdkToken),
           ),
@@ -284,12 +327,12 @@ export function startServer(port = PORT, host = HOST) {
           }
 
           // Enforce authentication when required
-          if (authRequired) {
+          if (!petAccessAuthorized && authRequired) {
             const authError = await requireH5Token(req, url.searchParams.get('token'))
             if (authError) {
               return withCors(authError, cors)
             }
-          } else if (forceAuth) {
+          } else if (!petAccessAuthorized && forceAuth) {
             const authError = await requireAuth(req, url.searchParams.get('token'))
             if (authError) {
               return withCors(authError, cors)
@@ -306,6 +349,7 @@ export function startServer(port = PORT, host = HOST) {
               sessionId,
               connectedAt: Date.now(),
               channel: 'client',
+              clientKind: petAccessAuthorized ? 'pet' : 'full',
               sdkToken: null,
               serverPort,
               serverHost: localConnectHost,
@@ -341,6 +385,7 @@ export function startServer(port = PORT, host = HOST) {
               sessionId,
               connectedAt: Date.now(),
               channel: 'sdk',
+              clientKind: 'full',
               sdkToken: url.searchParams.get('token'),
               serverPort,
               serverHost: localConnectHost,
@@ -421,12 +466,12 @@ export function startServer(port = PORT, host = HOST) {
           }
 
           // Enforce authentication when required
-          if (authRequired) {
+          if (!petAccessAuthorized && authRequired) {
             const authError = await requireH5Token(req)
             if (authError) {
               return withCors(authError, cors)
             }
-          } else if (forceAuth) {
+          } else if (!petAccessAuthorized && forceAuth) {
             const authError = await requireAuth(req)
             if (authError) {
               return withCors(authError, cors)

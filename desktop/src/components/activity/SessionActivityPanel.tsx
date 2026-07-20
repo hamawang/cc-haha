@@ -174,7 +174,7 @@ function TaskStatusMarker({ status, t }: { status: ActivityRow['status']; t: Tra
     return (
       <span
         aria-label={t('session.activity.task.inProgress')}
-        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-[var(--color-accent)] bg-[var(--color-surface)] text-[var(--color-accent)]"
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-[var(--color-brand)] bg-[var(--color-surface)] text-[var(--color-brand)]"
       >
         <LoaderCircle size={13} strokeWidth={2.4} aria-hidden="true" className="motion-safe:animate-spin motion-reduce:animate-none" />
       </span>
@@ -207,7 +207,7 @@ function getRowIcon(row: ActivityRow) {
 
 function getStatusTone(status: ActivityRow['status']) {
   if (status === 'running' || status === 'in_progress') {
-    return 'bg-[var(--color-accent)]'
+    return 'bg-[var(--color-brand)]'
   }
   if (status === 'completed' || status === 'idle') {
     return 'bg-[var(--color-success)]'

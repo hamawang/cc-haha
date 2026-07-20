@@ -49,6 +49,8 @@ import { isValidPermissionMode } from '../services/settingsService.js'
 import { handleWorkspaceSearchRoute } from './workspaceSearch.js'
 import { localIndexCoordinator } from '../services/localIndex/coordinator.js'
 import { getClaudeConfigHomeDir } from '../../utils/envUtils.js'
+import { isPetAccessAuthorized } from '../localAccessAuth.js'
+import { PET_SESSION_LIMIT } from '../petAccessPolicy.js'
 
 const DEFAULT_GIT_INFO_COMMAND_TIMEOUT_MS = 3_000
 
@@ -77,7 +79,7 @@ export async function handleSessionsApi(
     if (!sessionId) {
       switch (req.method) {
         case 'GET':
-          return await listSessions(url)
+          return await listSessions(req, url)
         case 'POST':
           return await createSession(req)
         default:
@@ -272,19 +274,40 @@ export async function handleSessionsApi(
 // Handler implementations
 // ============================================================================
 
-async function listSessions(url: URL): Promise<Response> {
+async function listSessions(req: Request, url: URL): Promise<Response> {
   const project = url.searchParams.get('project') || undefined
-  const limit = parseInt(url.searchParams.get('limit') || '20', 10)
+  const requestedLimit = parseInt(url.searchParams.get('limit') || '20', 10)
   const offset = parseInt(url.searchParams.get('offset') || '0', 10)
 
-  if (isNaN(limit) || limit < 0) {
+  if (isNaN(requestedLimit) || requestedLimit < 0) {
     throw ApiError.badRequest('Invalid limit parameter')
   }
   if (isNaN(offset) || offset < 0) {
     throw ApiError.badRequest('Invalid offset parameter')
   }
 
-  const result = await sessionService.listSessions({ project, limit, offset })
+  const petAccess = isPetAccessAuthorized(req)
+  const limit = petAccess ? Math.min(requestedLimit, PET_SESSION_LIMIT) : requestedLimit
+  const result = await sessionService.listSessions({
+    ...(petAccess ? {} : { project }),
+    limit,
+    offset: petAccess ? 0 : offset,
+  })
+  if (petAccess) {
+    return Response.json({
+      sessions: result.sessions.map((session) => ({
+        id: session.id,
+        title: session.title,
+        createdAt: session.createdAt,
+        modifiedAt: session.modifiedAt,
+        messageCount: session.messageCount,
+        projectPath: '',
+        workDir: null,
+        workDirExists: false,
+      })),
+      total: result.sessions.length,
+    })
+  }
   return Response.json({
     ...result,
     index: localIndexCoordinator.getPublicStatus(),
