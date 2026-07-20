@@ -5261,6 +5261,36 @@ describe('chatStore history mapping', () => {
     expect(updateTabStatusMock).toHaveBeenCalledWith(TEST_SESSION_ID, 'idle')
   })
 
+  it('refreshes unfinished Task V2 tool state once when the message completes', () => {
+    cliTaskStoreSnapshot.sessionId = TEST_SESSION_ID
+    useChatStore.setState({
+      sessions: {
+        [TEST_SESSION_ID]: makeSession({ chatState: 'tool_executing' }),
+      },
+    })
+
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'tool_use_complete',
+      toolName: 'TaskUpdate',
+      toolUseId: 'task-update-1',
+      input: { taskId: '1', status: 'completed' },
+    })
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'message_complete',
+      usage: { input_tokens: 1, output_tokens: 2 },
+    })
+
+    expect(refreshTasksMock).toHaveBeenCalledTimes(1)
+    expect(refreshTasksMock).toHaveBeenCalledWith(TEST_SESSION_ID)
+
+    useChatStore.getState().handleServerMessage(TEST_SESSION_ID, {
+      type: 'message_complete',
+      usage: { input_tokens: 1, output_tokens: 2 },
+    })
+
+    expect(refreshTasksMock).toHaveBeenCalledTimes(1)
+  })
+
   it('flushes pending text before appending a thinking block', () => {
     vi.useFakeTimers()
 

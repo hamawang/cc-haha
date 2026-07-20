@@ -351,6 +351,13 @@ function clearPendingTaskToolUseIds(sessionId: string): void {
   pendingTaskToolUseIdsBySession.delete(sessionId)
 }
 
+function consumeAllPendingTaskToolUseIds(sessionId: string): boolean {
+  const hasPendingTaskTools =
+    (pendingTaskToolUseIdsBySession.get(sessionId)?.size ?? 0) > 0
+  pendingTaskToolUseIdsBySession.delete(sessionId)
+  return hasPendingTaskTools
+}
+
 function rememberPendingToolParentUseId(
   sessionId: string,
   toolUseId: string | null | undefined,
@@ -2423,6 +2430,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       case 'message_complete': {
         const session = get().sessions[sessionId]
         if (!session) break
+        if (consumeAllPendingTaskToolUseIds(sessionId)) {
+          const cliTaskStore = useCLITaskStore.getState()
+          if (cliTaskStore.sessionId === sessionId) {
+            void cliTaskStore.refreshTasks(sessionId)
+          }
+        }
         if (session.suppressNextTaskNotificationResponse) {
           consumePendingDelta(sessionId)
           clearPendingToolInputDelta(sessionId)
