@@ -108,25 +108,25 @@ describe('provider-aware thinking support', () => {
     expect(modelSupportsMaxEffort('MiniMax-M3[1m]')).toBe(false)
   })
 
-  test('Kimi preset models declare thinking without effort passthrough', () => {
-    process.env.ANTHROPIC_BASE_URL = 'https://api.moonshot.cn/anthropic'
-    process.env.ANTHROPIC_DEFAULT_SONNET_MODEL = 'kimi-k2.7-code'
+  test('Kimi K3 preset requires thinking and supports effort passthrough', () => {
+    process.env.ANTHROPIC_BASE_URL = 'https://api.kimi.com/coding/'
+    process.env.ANTHROPIC_DEFAULT_SONNET_MODEL = 'k3'
     process.env.ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES =
-      'thinking,required_thinking'
+      'thinking,required_thinking,effort,max_effort'
     clearCapabilityCache()
 
-    expect(modelSupportsThinking('kimi-k2.7-code')).toBe(true)
-    expect(modelSupportsAdaptiveThinking('kimi-k2.7-code')).toBe(false)
-    expect(modelRequiresThinking('kimi-k2.7-code')).toBe(true)
-    expect(resolveModelThinkingEnabled('kimi-k2.7-code', false)).toBe(true)
-    expect(modelSupportsEffort('kimi-k2.7-code')).toBe(false)
-    expect(modelSupportsMaxEffort('kimi-k2.7-code')).toBe(false)
+    expect(modelSupportsThinking('k3')).toBe(true)
+    expect(modelSupportsAdaptiveThinking('k3')).toBe(false)
+    expect(modelRequiresThinking('k3')).toBe(true)
+    expect(resolveModelThinkingEnabled('k3', false)).toBe(true)
+    expect(modelSupportsEffort('k3')).toBe(true)
+    expect(modelSupportsMaxEffort('k3')).toBe(true)
     expect(modelRequiresThinking('kimi-k2.6')).toBe(false)
     expect(resolveModelThinkingEnabled('kimi-k2.6', false)).toBe(false)
   })
 
   test('third-party base URLs do not default unknown model names to effort support', () => {
-    process.env.ANTHROPIC_BASE_URL = 'https://api.moonshot.cn/anthropic'
+    process.env.ANTHROPIC_BASE_URL = 'https://api.kimi.com/coding/'
     delete process.env.ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES
     clearCapabilityCache()
 

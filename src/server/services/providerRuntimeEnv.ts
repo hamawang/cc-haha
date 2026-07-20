@@ -53,6 +53,8 @@ export const MANAGED_PROVIDER_ENV_KEYS = [
 
 const CUSTOM_PROVIDER_MODEL_CAPABILITIES = 'thinking,effort,adaptive_thinking,max_effort'
 const XIAOMI_MIMO_MODEL_CAPABILITIES = 'thinking'
+const KIMI_K3_MODEL_CAPABILITIES = 'thinking,required_thinking,effort,max_effort'
+const KIMI_CODING_FALLBACK_MODEL_CAPABILITIES = 'thinking,required_thinking'
 const AUTH_ENV_KEYS = new Set(['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'])
 const MODEL_SLOTS = ['main', 'haiku', 'sonnet', 'opus'] as const
 
@@ -288,6 +290,39 @@ function getCustomProviderModelCapabilities(
   return CUSTOM_PROVIDER_MODEL_CAPABILITIES
 }
 
+function getKimiModelCapabilities(model: string): string {
+  const normalized = model
+    .trim()
+    .replace(/\[1m\]$/i, '')
+    .replace(/:1m$/i, '')
+    .toLowerCase()
+  return normalized === 'k3'
+    ? KIMI_K3_MODEL_CAPABILITIES
+    : KIMI_CODING_FALLBACK_MODEL_CAPABILITIES
+}
+
+function getProviderCapabilityEnv(
+  provider: SavedProvider,
+  models: SavedProvider['models'],
+): Record<string, string> {
+  if (provider.presetId === 'custom') {
+    const capabilities = getCustomProviderModelCapabilities(provider, models)
+    return {
+      ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES: capabilities,
+      ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES: capabilities,
+      ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES: capabilities,
+    }
+  }
+  if (provider.presetId === 'kimi') {
+    return {
+      ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES: getKimiModelCapabilities(models.haiku),
+      ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES: getKimiModelCapabilities(models.sonnet),
+      ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES: getKimiModelCapabilities(models.opus),
+    }
+  }
+  return {}
+}
+
 export function buildProviderAuthEnv(
   provider: SavedProvider,
   presetDefaultEnv: Record<string, string>,
@@ -353,19 +388,11 @@ export function buildProviderManagedEnv(
   }
 
   const presetDefaultEnv = getPresetDefaultEnv(provider.presetId)
-  const customProviderCapabilities = getCustomProviderModelCapabilities(provider, models)
-  const customProviderCapabilityEnv =
-    provider.presetId === 'custom'
-      ? {
-          ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES: customProviderCapabilities,
-          ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES: customProviderCapabilities,
-          ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES: customProviderCapabilities,
-        }
-      : {}
+  const providerCapabilityEnv = getProviderCapabilityEnv(provider, models)
 
   return {
     ...omitAuthEnv(presetDefaultEnv),
-    ...customProviderCapabilityEnv,
+    ...providerCapabilityEnv,
     ...(provider.autoCompactWindow !== undefined && {
       CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(provider.autoCompactWindow),
     }),

@@ -271,6 +271,43 @@ describe('providerRuntimeEnv', () => {
           presetId: 'kimi',
           name: 'Kimi',
           apiKey: 'sk-kimi',
+          authStrategy: 'api_key',
+          baseUrl: 'https://api.kimi.com/coding/',
+          apiFormat: 'anthropic',
+          models: {
+            main: 'k3',
+            haiku: 'k3',
+            sonnet: 'k3',
+            opus: 'k3',
+          },
+        },
+      ],
+    })
+
+    const kimiEnv = readActiveProviderManagedEnv(tmpDir)
+
+    expect(kimiEnv).toMatchObject({
+      ANTHROPIC_BASE_URL: 'https://api.kimi.com/coding/',
+      ANTHROPIC_API_KEY: 'sk-kimi',
+      ANTHROPIC_MODEL: 'k3',
+      ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES:
+        'thinking,required_thinking,effort,max_effort',
+    })
+    expect(kimiEnv?.ANTHROPIC_AUTH_TOKEN).toBeUndefined()
+    expect(JSON.parse(kimiEnv!.CLAUDE_CODE_MODEL_CONTEXT_WINDOWS)).toMatchObject({
+      k3: 262144,
+      'kimi-for-coding': 262144,
+      'kimi-for-coding-highspeed': 262144,
+    })
+
+    await writeJson(path.join(tmpDir, 'cc-haha', 'providers.json'), {
+      activeId: 'provider-kimi-legacy',
+      providers: [
+        {
+          id: 'provider-kimi-legacy',
+          presetId: 'kimi',
+          name: 'Kimi Open Platform',
+          apiKey: 'sk-kimi-legacy',
           authStrategy: 'auth_token',
           baseUrl: 'https://api.moonshot.cn/anthropic',
           apiFormat: 'anthropic',
@@ -284,16 +321,14 @@ describe('providerRuntimeEnv', () => {
       ],
     })
 
-    const kimiEnv = readActiveProviderManagedEnv(tmpDir)
+    const legacyKimiEnv = readActiveProviderManagedEnv(tmpDir)
 
-    expect(kimiEnv).toMatchObject({
+    expect(legacyKimiEnv).toMatchObject({
       ANTHROPIC_BASE_URL: 'https://api.moonshot.cn/anthropic',
+      ANTHROPIC_API_KEY: '',
+      ANTHROPIC_AUTH_TOKEN: 'sk-kimi-legacy',
       ANTHROPIC_MODEL: 'kimi-k2.7-code',
       ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES: 'thinking,required_thinking',
-    })
-    expect(JSON.parse(kimiEnv!.CLAUDE_CODE_MODEL_CONTEXT_WINDOWS)).toMatchObject({
-      'kimi-k2.7-code': 262144,
-      'kimi-k2.7-code-highspeed': 262144,
     })
 
     await writeJson(path.join(tmpDir, 'cc-haha', 'providers.json'), {
