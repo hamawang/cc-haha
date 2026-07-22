@@ -900,6 +900,7 @@ function stripModel1mMarker(model: string): string {
 function stripModel1mMarkers(models: ModelMapping): ModelMapping {
   return {
     main: stripModel1mMarker(models.main),
+    ...(models.fable ? { fable: stripModel1mMarker(models.fable) } : {}),
     haiku: stripModel1mMarker(models.haiku),
     sonnet: stripModel1mMarker(models.sonnet),
     opus: stripModel1mMarker(models.opus),
@@ -929,6 +930,7 @@ function applyModel1mSupportMapping(
 ): ModelMapping {
   return {
     main: applyModel1mSupport(models.main, model1mSupport.main),
+    ...(models.fable ? { fable: stripModel1mMarker(models.fable) } : {}),
     haiku: applyModel1mSupport(models.haiku, model1mSupport.haiku),
     sonnet: applyModel1mSupport(models.sonnet, model1mSupport.sonnet),
     opus: applyModel1mSupport(models.opus, model1mSupport.opus),
@@ -968,6 +970,7 @@ function normalizeModelMapping(models: ModelMapping): ModelMapping {
   const main = models.main.trim()
   return {
     main,
+    ...(models.fable?.trim() ? { fable: models.fable.trim() } : {}),
     haiku: models.haiku.trim() || main,
     sonnet: models.sonnet.trim() || main,
     opus: models.opus.trim() || main,
@@ -982,6 +985,14 @@ function readSettingsEnvString(env: Record<string, unknown>, key: string): strin
 }
 
 function readModelMappingFromSettingsEnv(env: Record<string, unknown>): Partial<ModelMapping> {
+  const hasModelEnv = [
+    'ANTHROPIC_MODEL',
+    'ANTHROPIC_DEFAULT_FABLE_MODEL',
+    'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+    'ANTHROPIC_DEFAULT_SONNET_MODEL',
+    'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  ].some((key) => Object.prototype.hasOwnProperty.call(env, key))
+  const fable = readSettingsEnvString(env, 'ANTHROPIC_DEFAULT_FABLE_MODEL')
   const haiku = readSettingsEnvString(env, 'ANTHROPIC_DEFAULT_HAIKU_MODEL')
   const sonnet = readSettingsEnvString(env, 'ANTHROPIC_DEFAULT_SONNET_MODEL')
   const opus = readSettingsEnvString(env, 'ANTHROPIC_DEFAULT_OPUS_MODEL')
@@ -989,6 +1000,7 @@ function readModelMappingFromSettingsEnv(env: Record<string, unknown>): Partial<
 
   return {
     ...(main ? { main } : {}),
+    ...(hasModelEnv ? { fable } : {}),
     ...(haiku ? { haiku } : {}),
     ...(sonnet ? { sonnet } : {}),
     ...(opus ? { opus } : {}),
@@ -1133,9 +1145,15 @@ function updateSettingsJsonModels(
       ? parsed.env
       : {}
     const runtimeModels = applyModel1mSupportMapping(models, model1mSupport)
+    const env = { ...existingEnv }
+    delete env.ANTHROPIC_DEFAULT_FABLE_MODEL
+    delete env.ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION
+    delete env.ANTHROPIC_DEFAULT_FABLE_MODEL_NAME
+    delete env.ANTHROPIC_DEFAULT_FABLE_MODEL_SUPPORTED_CAPABILITIES
     parsed.env = {
-      ...existingEnv,
+      ...env,
       ANTHROPIC_MODEL: runtimeModels.main,
+      ...(runtimeModels.fable ? { ANTHROPIC_DEFAULT_FABLE_MODEL: runtimeModels.fable } : {}),
       ANTHROPIC_DEFAULT_HAIKU_MODEL: runtimeModels.haiku,
       ANTHROPIC_DEFAULT_SONNET_MODEL: runtimeModels.sonnet,
       ANTHROPIC_DEFAULT_OPUS_MODEL: runtimeModels.opus,
@@ -1282,6 +1300,7 @@ function ProviderFormModal({ open, onClose, mode, provider, presets }: ProviderF
           ANTHROPIC_BASE_URL: needsProxy ? providerProxyBaseUrl : baseUrl,
           ...buildSettingsJsonAuthEnv(apiFormat, authStrategy, apiKey, selectedPreset),
           ANTHROPIC_MODEL: runtimeModels.main,
+          ...(runtimeModels.fable ? { ANTHROPIC_DEFAULT_FABLE_MODEL: runtimeModels.fable } : {}),
           ANTHROPIC_DEFAULT_HAIKU_MODEL: runtimeModels.haiku,
           ANTHROPIC_DEFAULT_SONNET_MODEL: runtimeModels.sonnet,
           ANTHROPIC_DEFAULT_OPUS_MODEL: runtimeModels.opus,

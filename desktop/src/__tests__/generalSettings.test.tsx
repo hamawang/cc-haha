@@ -1906,6 +1906,20 @@ describe('Settings > Providers tab', () => {
     expect(providerStoreState.testConfig).not.toHaveBeenCalledWith(expect.objectContaining({
       modelId: 'deepseek-v4-pro',
     }))
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /Save|Add|保存|添加/i }))
+
+    await waitFor(() => {
+      expect(providerStoreState.createProvider).toHaveBeenCalledWith(expect.objectContaining({
+        models: expect.objectContaining({
+          fable: 'Qwen3Coder',
+          main: 'claude-sonnet-4-6',
+          haiku: 'claude-haiku-4-5',
+          sonnet: 'claude-sonnet-4-6',
+          opus: 'claude-opus-4-8',
+        }),
+      }))
+    })
   })
 
   it('keeps the provider form locked while save is in flight', async () => {
