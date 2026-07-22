@@ -347,10 +347,10 @@ export function PetSettings() {
             </div>
             <div className="border-t border-[var(--color-border)]/70 pt-4">
               <ToggleRow
-                label={t('settings.pets.collapsed')}
-                description={t('settings.pets.collapsedDescription')}
-                checked={preferences.collapsed}
-                onChange={(checked) => void updatePreferences({ collapsed: checked })}
+                label={t('settings.pets.showTaskPanel')}
+                description={t('settings.pets.showTaskPanelDescription')}
+                checked={preferences.showTaskPanel}
+                onChange={(checked) => void updatePreferences({ showTaskPanel: checked })}
               />
             </div>
           </section>

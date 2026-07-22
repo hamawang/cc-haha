@@ -58,6 +58,7 @@ const defaultPetPreferences: DesktopPetPreferences = {
   enabled: false,
   selectedPetId: 'dada-code',
   size: 144,
+  showTaskPanel: false,
   collapsed: false,
   motionEnabled: true,
   lastSessionId: null,
@@ -67,7 +68,7 @@ function preferencesResponse(pet: DesktopPetPreferences) {
   return {
     exists: true,
     preferences: {
-      schemaVersion: 3,
+      schemaVersion: 4,
       sidebar: {
         projectOrder: [],
         pinnedProjects: [],
@@ -156,6 +157,20 @@ describe('PetSettings', () => {
     expect(hidePetMock).not.toHaveBeenCalled()
   })
 
+  it('keeps the task panel disabled by default and persists enabling it', async () => {
+    render(<PetSettings />)
+
+    const panelToggle = await screen.findByRole('checkbox', { name: 'Show active task panel' })
+    expect(panelToggle).not.toBeChecked()
+    expect(screen.queryByRole('checkbox', { name: 'Start collapsed' })).not.toBeInTheDocument()
+
+    fireEvent.click(panelToggle)
+
+    await waitFor(() => {
+      expect(updatePetPreferencesMock).toHaveBeenCalledWith({ showTaskPanel: true })
+    })
+  })
+
   it('rolls back optimistic preferences when persistence fails', async () => {
     updatePetPreferencesMock.mockRejectedValueOnce(new Error('disk full'))
     render(<PetSettings />)
@@ -232,12 +247,12 @@ describe('PetSettings', () => {
 
     fireEvent.change(screen.getByRole('slider', { name: 'Pet size' }), { target: { value: '176' } })
     fireEvent.click(screen.getByRole('checkbox', { name: 'Play animations' }))
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Start collapsed' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Show active task panel' }))
 
     await waitFor(() => {
       expect(updatePetPreferencesMock).toHaveBeenCalledWith({ size: 176 })
       expect(updatePetPreferencesMock).toHaveBeenCalledWith({ motionEnabled: false })
-      expect(updatePetPreferencesMock).toHaveBeenCalledWith({ collapsed: true })
+      expect(updatePetPreferencesMock).toHaveBeenCalledWith({ showTaskPanel: true })
     })
   })
 

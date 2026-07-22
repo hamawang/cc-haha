@@ -646,7 +646,9 @@ describe('loadCustomPets', () => {
     ['unsupported image format', { spritesheetPath: 'spritesheet.gif' }, 'unsupported-image-format'],
   ])('rejects %s', async (_label, overrides, code) => {
     const root = makeTempDir()
-    writePet(root, 'bad-pet', validManifest(overrides))
+    const petDir = path.join(root, 'bad-pet')
+    fs.mkdirSync(petDir)
+    fs.writeFileSync(path.join(petDir, 'pet.json'), JSON.stringify(validManifest(overrides)))
 
     const result = await loadCustomPets({ root, inspectImageSize: validSizeInspector })
 

@@ -289,6 +289,8 @@ export const zh: Record<TranslationKey, string> = {
   'settings.pets.sizeDescription': '可在 96 到 192 像素之間調整。',
   'settings.pets.motion': '播放動畫',
   'settings.pets.motionDescription': '關閉後寵物仍可使用，但不會移動。',
+  'settings.pets.showTaskPanel': '顯示進行中的工作區域',
+  'settings.pets.showTaskPanelDescription': '有工作執行時顯示矩形工作區域；沒有進行中的工作時一律隱藏。',
   'settings.pets.collapsed': '預設收合',
   'settings.pets.collapsedDescription': '預設只顯示寵物，需要時再展開任務面板。',
   'settings.pets.folderTitle': '自訂寵物資料夾',
@@ -315,6 +317,8 @@ export const zh: Record<TranslationKey, string> = {
   'pet.window.status.running': '工作中',
   'pet.window.status.idle': '閒置',
   'pet.window.sessionCount': '{count} 個任務',
+  'pet.window.expandTasks': '顯示 {count} 個進行中的任務',
+  'pet.window.hideTasks': '隱藏 {count} 個進行中的任務',
   'pet.window.untitledSession': '未命名任務',
 
   // Settings > Usage

@@ -287,6 +287,8 @@ export const en = {
   'settings.pets.sizeDescription': 'Adjust the pet between 96 and 192 pixels.',
   'settings.pets.motion': 'Play animations',
   'settings.pets.motionDescription': 'Turn off movement while keeping the pet available.',
+  'settings.pets.showTaskPanel': 'Show active task panel',
+  'settings.pets.showTaskPanelDescription': 'Show the rectangular task panel while tasks are running. It stays hidden when no task is active.',
   'settings.pets.collapsed': 'Start collapsed',
   'settings.pets.collapsedDescription': 'Show only the pet until you open its task panel.',
   'settings.pets.folderTitle': 'Custom pet folder',
@@ -313,6 +315,8 @@ export const en = {
   'pet.window.status.running': 'Working',
   'pet.window.status.idle': 'Idle',
   'pet.window.sessionCount': '{count} tasks',
+  'pet.window.expandTasks': 'Show {count} active tasks',
+  'pet.window.hideTasks': 'Hide {count} active tasks',
   'pet.window.untitledSession': 'Untitled task',
 
   // Settings > Usage

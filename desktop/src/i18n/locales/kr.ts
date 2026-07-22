@@ -289,6 +289,8 @@ export const kr: Record<TranslationKey, string> = {
   'settings.pets.sizeDescription': '96~192픽셀 사이에서 조절합니다.',
   'settings.pets.motion': '애니메이션 재생',
   'settings.pets.motionDescription': '꺼도 펫은 사용할 수 있지만 움직이지 않습니다.',
+  'settings.pets.showTaskPanel': '진행 중인 작업 패널 표시',
+  'settings.pets.showTaskPanelDescription': '작업이 실행 중일 때만 사각형 작업 패널을 표시합니다. 진행 중인 작업이 없으면 항상 숨깁니다.',
   'settings.pets.collapsed': '접힌 상태로 시작',
   'settings.pets.collapsedDescription': '작업 패널을 열기 전에는 펫만 표시합니다.',
   'settings.pets.folderTitle': '사용자 지정 펫 폴더',
@@ -315,6 +317,8 @@ export const kr: Record<TranslationKey, string> = {
   'pet.window.status.running': '작업 중',
   'pet.window.status.idle': '대기 중',
   'pet.window.sessionCount': '작업 {count}개',
+  'pet.window.expandTasks': '진행 중인 작업 {count}개 표시',
+  'pet.window.hideTasks': '진행 중인 작업 {count}개 숨기기',
   'pet.window.untitledSession': '제목 없는 작업',
 
   // Settings > Usage

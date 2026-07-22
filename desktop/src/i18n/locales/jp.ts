@@ -289,6 +289,8 @@ export const jp: Record<TranslationKey, string> = {
   'settings.pets.sizeDescription': '96〜192ピクセルの範囲で調整します。',
   'settings.pets.motion': 'アニメーションを再生',
   'settings.pets.motionDescription': 'オフにしてもペットは利用できますが、動きません。',
+  'settings.pets.showTaskPanel': '実行中のタスクパネルを表示',
+  'settings.pets.showTaskPanelDescription': 'タスクの実行中だけ長方形のパネルを表示します。実行中のタスクがなければ常に非表示です。',
   'settings.pets.collapsed': '最初は折りたたむ',
   'settings.pets.collapsedDescription': 'タスクパネルを開くまでペットだけを表示します。',
   'settings.pets.folderTitle': 'カスタムペットフォルダー',
@@ -315,6 +317,8 @@ export const jp: Record<TranslationKey, string> = {
   'pet.window.status.running': '作業中',
   'pet.window.status.idle': '待機中',
   'pet.window.sessionCount': '{count} 件のタスク',
+  'pet.window.expandTasks': '実行中のタスク {count} 件を表示',
+  'pet.window.hideTasks': '実行中のタスク {count} 件を隠す',
   'pet.window.untitledSession': '無題のタスク',
 
   // Settings > Usage
